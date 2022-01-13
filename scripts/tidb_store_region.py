@@ -136,7 +136,6 @@ class OptionHandler(object):
                                                                 region.approximate_keys))
 
     # 展示某个storeID上的所有regions信息(默认输出前self.limit个)
-    # FIXME：避免一次性查出store上的所有region再取前limit个，应当只查前limit个
     def showStoreRegions(self):
         if not self.storeID:
             print("Store ID should be specified!")
@@ -202,7 +201,8 @@ class OptionHandler(object):
                                region_count
                                ))
             else:
-                logger.info("%s[%d/%d]" % (respText, 1 + 1, region_count))
+                logger.error("Operator remove-peer created failed for region %-10d peer on store %d[%d/%d].\n%s"
+                             % (region.region_id, self.storeID, i + 1, region_count, respText))
             i += 1
 
     # 根据给定的option执行对应的指令
