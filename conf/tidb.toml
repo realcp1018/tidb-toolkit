@@ -1,0 +1,43 @@
+[basic]
+# 必填配置，数据库IP地址
+host = "127.0.0.1"
+# 必填配置，数据库端口号
+port = 4000
+# 必填配置，数据库用户名
+user = "root"
+# 必填配置，数据库密码
+password = "root"
+
+[flashback]
+# 必填配置，恢复的表所在的数据库
+db = ""
+# 必填配置，要恢复的表
+table =""
+# 必填配置，格式"2020-01-01 00:00:00",设置恢复的快照时间，必须晚于tikv_gc_safe_point
+until_time = "2020-01-01 00:00:00"
+# 可选配置，限制单个线程影响的行数范围，默认1000
+batch_size = 1000
+# 可选配置，限制同时在数据库中运行的会话数，默认20
+max_workers = 20
+# 可选配置(true/false)，设置恢复完毕后是否使用恢复的出来的表覆盖原表
+override = false
+
+[massive_dml]
+# 必填配置，要操作的table所属db
+db = ""
+# 必填配置，dml sql直接操作的表名，不能使用db.table格式
+table = ""
+# 必填配置，dml sql，每次只支持单条SQL
+sql = ""
+# 可选配置，限制sql执行的最小_tidb_rowid,默认为table的min(_tidb_rowid)
+# start_rowid =
+# 可选配置，限制sql执行的最大_tidb_rowid,默认为table的max(_tidb_rowid)
+# end_rowid =
+# 可选配置，限制单个线程影响的行数范围，默认1000
+batch_size = 1000
+# 可选配置，限制同时在数据库中运行的会话数，默认50
+max_workers = 50
+# 可选配置(true/false)，默认为False表示不实际执行只打印拆分后的SQL
+execute = false
+
+
