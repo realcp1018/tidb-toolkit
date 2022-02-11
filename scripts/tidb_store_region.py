@@ -8,6 +8,7 @@ import argparse
 import json
 import requests
 from utils.logger import StreamLogger
+from time import sleep
 from pprint import pprint
 
 # const
@@ -30,23 +31,26 @@ def argParse():
     parser.add_argument("-o", "--option", dest="option", required=True, choices=All_Support_Actions,
                         help="Store/Region Actions")
     parser.add_argument("-l", "--limit", dest="limit", type=int, default=5, help="Region show limit(default 5)")
+    parser.add_argument("-t", "--interval-time", dest="interval", type=int, default=3,
+                        help="Operator create interval time")
     return parser.parse_args()
 
 
 class OptionHandler(object):
-    def __init__(self, url, storeID, regionID, option, limit=5):
-        self.url = url
-        self.storeID = storeID
-        self.regionID = regionID
-        self.option = option
-        self.limit = limit
+    def __init__(self, url, storeID, regionID, option, limit, interval):
+        self.__url = url
+        self.__storeID = storeID
+        self.__regionID = regionID
+        self.__option = option
+        self.__limit = limit
+        self.__interval = interval
 
     # 展示单个store信息
     def showStore(self):
-        if not self.storeID:
+        if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
-        store = Store.from_api_storeid(pd_addr=self.url, store_id=self.storeID)
+        store = Store.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
         # Output Demo:
         # Glossary: LCt->LeaderCount  RCt->RegionCount  LWt:->LeaderWeight  RWt:->RegionWeight
         # StoreID   StoreAddr           State   LCt/RCt         LWt/RWt   StartTime
@@ -62,7 +66,7 @@ class OptionHandler(object):
 
     # 展示所有store信息
     def showStores(self):
-        stores = Store.from_api_all(pd_addr=self.url)
+        stores = Store.from_api_all(pd_addr=self.__url)
         print("%-30s%-15s%-15s%-15s%-15s%-30s" % ("StoreAddr", "StoreID", "State", "LCt/RCt", "LWt/RWt",
                                                   "StartTime"))
         print("%-30s%-15s%-15s%-15s%-15s%-30s" % ("---------", "-------", "-----", "-------", "-------",
@@ -75,10 +79,10 @@ class OptionHandler(object):
 
     # 展示单个regions信息
     def showRegion(self):
-        if not self.regionID:
+        if not self.__regionID:
             print("Region ID should be specified!")
             exit(1)
-        region = Region.from_api_regionid(pd_addr=self.url, region_id=self.regionID)
+        region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
         # Output Demo:
         # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
         # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
@@ -90,7 +94,7 @@ class OptionHandler(object):
                                                             "-------------------", "----", "----"))
         storeList = [p["store_id"] for p in region.peers]
         leader = region.leader["store_id"]
-        leaderAddr = Store.from_api_storeid(pd_addr=self.url, store_id=leader).address
+        leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
         if region.down_peers:
             downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
         else:
@@ -106,11 +110,11 @@ class OptionHandler(object):
 
     # 展示所有regions信息(默认输出前self.limit个)
     def showRegions(self):
-        regions = Region.from_api_all_limit(pd_addr=self.url, limit=self.limit)
+        regions = Region.from_api_all_limit(pd_addr=self.__url, limit=self.__limit)
         # Output Demo:
         # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
         # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
-        print("# topRead {0} Regions(limit {0}):".format(self.limit))
+        print("# topRead {0} Regions(limit {0}):".format(self.__limit))
         print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
                                                             "LeaderAddr", "DownPeersStoreID",
                                                             "PendingPeersStoreID", "Size", "Keys"))
@@ -120,7 +124,7 @@ class OptionHandler(object):
         for region in regions:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader["store_id"]
-            leaderAddr = Store.from_api_storeid(pd_addr=self.url, store_id=leader).address
+            leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -137,24 +141,24 @@ class OptionHandler(object):
 
     # 展示某个storeID上的所有regions信息(默认输出前self.limit个)
     def showStoreRegions(self):
-        if not self.storeID:
+        if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
-        regions = Region.from_api_storeid(pd_addr=self.url, store_id=self.storeID)
+        regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
         # Output Demo:
         # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
         # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
-        print("# top {0} Regions(limit {0}):".format(self.limit))
+        print("# top {0} Regions(limit {0}):".format(self.__limit))
         print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
                                                             "LeaderAddr", "DownPeersStoreID",
                                                             "PendingPeersStoreID", "Size", "Keys"))
         print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
                                                             "----------", "----------------",
                                                             "-------------------", "----", "----"))
-        for region in regions[:self.limit]:
+        for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader["store_id"]
-            leaderAddr = Store.from_api_storeid(pd_addr=self.url, store_id=leader).address
+            leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -171,55 +175,56 @@ class OptionHandler(object):
 
     # 移除指定self.regionID在self.storeID上的peer(副本)，一般用于删除异常副本，之后由tidb集群的raft机制自动补全3副本
     def removeRegionPeer(self):
-        if not self.storeID or not self.regionID:
+        if not self.__storeID or not self.__regionID:
             print("Both Store ID and Region ID should be specified!")
             exit(1)
-        region = Region.from_api_regionid(pd_addr=self.url, region_id=self.regionID)
-        isSuccess, respText = region.remove_peer(pd_addr=self.url, store_id=self.storeID)
+        region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
+        isSuccess, respText = region.remove_peer(pd_addr=self.__url, store_id=self.__storeID)
         if isSuccess:
-            logger.info("Operator remove-peer created for region %d's peer on store %d[1/1]." % (self.regionID,
-                                                                                                 self.storeID))
+            logger.info("Operator remove-peer created for region %d's peer on store %d[1/1]." % (self.__regionID,
+                                                                                                 self.__storeID))
         else:
-            logger.info(respText)
+            logger.error(respText)
 
     # 移除指定self.storeID上的所有peer(副本)，一般用于删除异常store上的副本，之后由tidb集群的raft机制自动补全3副本
     def removeStorePeers(self):
-        if not self.storeID:
+        if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
-        storeRegions = Region.from_api_storeid(pd_addr=self.url, store_id=self.storeID)
+        storeRegions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
         i = 0
         region_count = len(storeRegions)
         while i < region_count:
             region = storeRegions[i]
-            isSuccess, respText = region.remove_peer(pd_addr=self.url, store_id=self.storeID)
+            isSuccess, respText = region.remove_peer(pd_addr=self.__url, store_id=self.__storeID)
             if isSuccess:
                 logger.info("Operator remove-peer created for region %-10d peer on store %d[%d/%d]."
                             % (region.region_id,
-                               self.storeID,
+                               self.__storeID,
                                i + 1,
                                region_count
                                ))
             else:
                 logger.error("Operator remove-peer created failed for region %-10d peer on store %d[%d/%d].\n%s"
-                             % (region.region_id, self.storeID, i + 1, region_count, respText))
+                             % (region.region_id, self.__storeID, i + 1, region_count, respText))
+            sleep(self.__interval)
             i += 1
 
     # 根据给定的option执行对应的指令
     def run(self):
-        if self.option == "showStore":
+        if self.__option == "showStore":
             self.showStore()
-        elif self.option == "showStores":
+        elif self.__option == "showStores":
             self.showStores()
-        elif self.option == "showRegion":
+        elif self.__option == "showRegion":
             self.showRegion()
-        elif self.option == "showRegions":
+        elif self.__option == "showRegions":
             self.showRegions()
-        elif self.option == "showStoreRegions":
+        elif self.__option == "showStoreRegions":
             self.showStoreRegions()
-        elif self.option == "removeRegionPeer":
+        elif self.__option == "removeRegionPeer":
             self.removeRegionPeer()
-        elif self.option == "removeStorePeers":
+        elif self.__option == "removeStorePeers":
             self.removeStorePeers()
         else:
             pass
@@ -434,5 +439,5 @@ class Region(object):
 
 if __name__ == '__main__':
     args = argParse()
-    optionHandler = OptionHandler(args.url, args.storeID, args.regionID, args.option, args.limit)
+    optionHandler = OptionHandler(args.url, args.storeID, args.regionID, args.option, args.limit, args.interval)
     optionHandler.run()
