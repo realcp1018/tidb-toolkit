@@ -235,7 +235,7 @@ class Store(object):
                  version=None, status_address=None, git_hash=None, deploy_path=None, state_name=None,
                  start_timestamp=None, start_ts=None, capacity=None, available=None, used_size=None, leader_count=None,
                  leader_size=None, leader_score=None, leader_weight=None, region_count=None, region_size=None,
-                 region_score=None, region_weight=None, uptime=None):
+                 region_score=None, region_weight=None, uptime=None, slow_score=None):
         self.store_id = store_id
         self.address = address
         self.labels = labels
@@ -260,6 +260,7 @@ class Store(object):
         self.region_score = region_score
         self.region_weight = region_weight
         self.uptime = uptime
+        self.slow_score = slow_score
 
     @classmethod
     def from_api_all(cls, pd_addr):
