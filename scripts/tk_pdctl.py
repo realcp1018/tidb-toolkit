@@ -13,9 +13,9 @@ from pprint import pprint
 from typing import List
 
 # const
-All_Support_Actions = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions", "removeRegionPeer",
-                       "removeStorePeers", "showRegions1Peer", "showRegions2Peer", "showRegions3Peer",
-                       "showRegions4Peer", "showRegionsNoLeader"]
+All_Support_Actions = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions",
+                       "showRegions1Peer", "showRegions2Peer", "showRegions3Peer", "showRegions4Peer",
+                       "showRegionsNoLeader", "removeRegionPeer", "removeStorePeers"]
 # TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
 #                        remove peer/peers when len(Region peers on Up stores after removed)>=2
 
@@ -26,14 +26,18 @@ logger = StreamLogger()
 # arg parse
 def argParse():
     parser = argparse.ArgumentParser(description="PD HTTP API store/region info formatter.")
-    parser.add_argument("-u", dest="url", required=True, help="PD Addr(ip:port)")
-    parser.add_argument("-s", "--store_id", dest="storeID", type=int, help="Store ID")
-    parser.add_argument("-r", "--region_id", dest="regionID", type=int, help="Region ID")
+    parser.add_argument("-u", dest="url", metavar="<ip:port>", required=True,
+                        help="PD Addr(ip:port)")
+    parser.add_argument("-s", "--store_id", dest="storeID", metavar="<store-id>", type=int,
+                        help="Store ID")
+    parser.add_argument("-r", "--region_id", dest="regionID", metavar="<region-id>", type=int,
+                        help="Region ID")
     parser.add_argument("-o", dest="option", required=True, choices=All_Support_Actions,
                         help="Store/Region Actions")
-    parser.add_argument("-l", "--limit", dest="limit", type=int, default=5, help="Region show limit(default 5)")
-    parser.add_argument("-t", "--interval-time", dest="interval", type=int, default=3,
-                        help="Operator create interval time")
+    parser.add_argument("-l", "--limit", dest="limit", metavar="<limit-size>", type=int, default=5,
+                        help="Region show limit(default 5)")
+    parser.add_argument("-t", "--interval-time", dest="interval", metavar="<interval>", type=int,
+                        default=3, help="Operator create interval(seconds), default 3")
     return parser.parse_args()
 
 
