@@ -51,6 +51,10 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
+        stores = [s.store_id for s in Store.from_api_all(pd_addr=self.__url)]
+        if self.__storeID not in stores:
+            print("Store ID %d not exist!" % self.__storeID)
+            exit(1)
         store = Store.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
         # Output Demo:
         # Glossary: LCt->LeaderCount  RCt->RegionCount  LWt:->LeaderWeight  RWt:->RegionWeight
