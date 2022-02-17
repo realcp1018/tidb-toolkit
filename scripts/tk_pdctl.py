@@ -10,13 +10,14 @@ import requests
 from utils.logger import StreamLogger
 from time import sleep
 from pprint import pprint
+from typing import List
 
 # const
 All_Support_Actions = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions", "removeRegionPeer",
-                       "removeStorePeers"]
-# TODO: 4 new actions -> showReionsWith[N]Peer where 1<=N<=4
+                       "removeStorePeers", "showRegions1Peer", "showRegions2Peer", "showRegions3Peer",
+                       "showRegions4Peer", "showRegionsNoLeader"]
 # TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
-#                        remove peer/peers when len(Region peers on Up stores after removed)>2
+#                        remove peer/peers when len(Region peers on Up stores after removed)>=2
 
 # logger
 logger = StreamLogger()
@@ -28,7 +29,7 @@ def argParse():
     parser.add_argument("-u", dest="url", required=True, help="PD Addr(ip:port)")
     parser.add_argument("-s", "--store_id", dest="storeID", type=int, help="Store ID")
     parser.add_argument("-r", "--region_id", dest="regionID", type=int, help="Region ID")
-    parser.add_argument("-o", "--option", dest="option", required=True, choices=All_Support_Actions,
+    parser.add_argument("-o", dest="option", required=True, choices=All_Support_Actions,
                         help="Store/Region Actions")
     parser.add_argument("-l", "--limit", dest="limit", type=int, default=5, help="Region show limit(default 5)")
     parser.add_argument("-t", "--interval-time", dest="interval", type=int, default=3,
@@ -37,7 +38,7 @@ def argParse():
 
 
 class OptionHandler(object):
-    def __init__(self, url, storeID, regionID, option, limit, interval):
+    def __init__(self, url: str, storeID: int, regionID: int, option: str, limit: int, interval: int):
         self.__url = url
         self.__storeID = storeID
         self.__regionID = regionID
@@ -82,7 +83,7 @@ class OptionHandler(object):
         if not self.__regionID:
             print("Region ID should be specified!")
             exit(1)
-        region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
+        region: Region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
         # Output Demo:
         # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
         # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
@@ -92,9 +93,9 @@ class OptionHandler(object):
         print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
                                                             "----------", "----------------",
                                                             "-------------------", "----", "----"))
-        storeList = [p["store_id"] for p in region.peers]
-        leader = region.leader["store_id"]
-        leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
+        storeList: List[int] = [p["store_id"] for p in region.peers]
+        leader: int = region.leader.get("store_id") if region.leader else None
+        leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
         if region.down_peers:
             downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
         else:
@@ -123,8 +124,8 @@ class OptionHandler(object):
                                                             "-------------------", "----", "----"))
         for region in regions:
             storeList = [p["store_id"] for p in region.peers]
-            leader = region.leader["store_id"]
-            leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
+            leader = region.leader.get("store_id") if region.leader else None
+            leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -138,6 +139,72 @@ class OptionHandler(object):
                                                                 PendingPeersStoreID,
                                                                 region.approximate_size,
                                                                 region.approximate_keys))
+
+    def showRegionsNPeer(self, n):
+        regions = Region.from_api_all(pd_addr=self.__url)
+        print("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
+        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
+                                                            "LeaderAddr", "DownPeersStoreID",
+                                                            "PendingPeersStoreID", "Size", "Keys"))
+        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
+                                                            "----------", "----------------",
+                                                            "-------------------", "----", "----"))
+        i = j = 0
+        while i < len(regions) and j <= self.__limit:
+            region = regions[i]
+            if len(region.peers) == n:
+                storeList = [p["store_id"] for p in region.peers]
+                leader = region.leader.get("store_id") if region.leader else None
+                leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url,
+                                                         store_id=leader).address if leader else None
+                if region.down_peers:
+                    downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
+                else:
+                    downPeersStoreID = []
+                if region.pending_peers:
+                    PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
+                else:
+                    PendingPeersStoreID = []
+                print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
+                                                                    leaderAddr, downPeersStoreID,
+                                                                    PendingPeersStoreID,
+                                                                    region.approximate_size,
+                                                                    region.approximate_keys))
+                j += 1
+            i += 1
+
+    def showRegionsNoLeader(self):
+        regions = Region.from_api_all(pd_addr=self.__url)
+        print("# RegionsNoLeader(limit {0}):".format(self.__limit))
+        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
+                                                            "LeaderAddr", "DownPeersStoreID",
+                                                            "PendingPeersStoreID", "Size", "Keys"))
+        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
+                                                            "----------", "----------------",
+                                                            "-------------------", "----", "----"))
+        i = j = 0
+        while i < len(regions) and j <= self.__limit:
+            region = regions[i]
+            if not region.leader:
+                storeList = [p["store_id"] for p in region.peers]
+                leader = region.leader.get("store_id") if region.leader else None
+                leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url,
+                                                         store_id=leader).address if leader else None
+                if region.down_peers:
+                    downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
+                else:
+                    downPeersStoreID = []
+                if region.pending_peers:
+                    PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
+                else:
+                    PendingPeersStoreID = []
+                print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
+                                                                    leaderAddr, downPeersStoreID,
+                                                                    PendingPeersStoreID,
+                                                                    region.approximate_size,
+                                                                    region.approximate_keys))
+                j += 1
+            i += 1
 
     # 展示某个storeID上的所有regions信息(默认输出前self.limit个)
     def showStoreRegions(self):
@@ -157,8 +224,8 @@ class OptionHandler(object):
                                                             "-------------------", "----", "----"))
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
-            leader = region.leader["store_id"]
-            leaderAddr = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address
+            leader = region.leader.get("store_id") if region.leader else None
+            leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -222,6 +289,16 @@ class OptionHandler(object):
             self.showRegions()
         elif self.__option == "showStoreRegions":
             self.showStoreRegions()
+        elif self.__option == "showRegions1Peer":
+            self.showRegionsNPeer(n=1)
+        elif self.__option == "showRegions2Peer":
+            self.showRegionsNPeer(n=2)
+        elif self.__option == "showRegions3Peer":
+            self.showRegionsNPeer(n=3)
+        elif self.__option == "showRegions4Peer":
+            self.showRegionsNPeer(n=4)
+        elif self.__option == "showRegionsNoLeader":
+            self.showRegionsNoLeader()
         elif self.__option == "removeRegionPeer":
             self.removeRegionPeer()
         elif self.__option == "removeStorePeers":
@@ -268,6 +345,8 @@ class Store(object):
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/stores" % pd_url, headers={"content-type": "application/json"})
         # pprint(resp.json())
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         for store in resp.json()["stores"]:
             cls_kwargs = {}
             for k, v in store["status"].items():
@@ -290,6 +369,8 @@ class Store(object):
         all_stores = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/stores" % pd_url, headers={"content-type": "application/json"})
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         # pprint(resp.json())
         for store in resp.json()["stores"]:
             if store["store"]["address"].split(":")[0] == ip:
@@ -314,6 +395,8 @@ class Store(object):
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/store/%d" % (pd_url, store_id), headers={"content-type": "application/json"})
         # pprint(resp.json())
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         store = resp.json()
         cls_kwargs = {}
         try:
@@ -359,6 +442,8 @@ class Region(object):
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions" % pd_url, headers={"content-type": "application/json"})
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         # pprint(resp.json())
         for region in resp.json()["regions"]:
             cls_kwargs = {}
@@ -376,6 +461,8 @@ class Region(object):
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions/readflow?limit=%d" % (pd_url, limit),
                             headers={"content-type": "application/json"})
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         # pprint(resp.json())
         for region in resp.json()["regions"]:
             cls_kwargs = {}
@@ -392,6 +479,8 @@ class Region(object):
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/region/id/%d" % (pd_url, region_id), headers={"content-type": "application/json"})
         # pprint(resp.json())
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         cls_kwargs = {}
         region = resp.json()
         if not region:
@@ -409,6 +498,8 @@ class Region(object):
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions/store/%d" % (pd_url, store_id), headers={"content-type": "application/json"})
+        if resp.status_code != 200:
+            raise Exception(resp.text)
         # pprint(resp.json())
         for region in resp.json()["regions"]:
             cls_kwargs = {}
@@ -420,7 +511,7 @@ class Region(object):
             all_regions.append(cls(**cls_kwargs))
         return all_regions
 
-    def remove_peer(self, pd_addr, store_id):
+    def remove_peer(self, pd_addr, store_id) -> (bool, str):
         # remove a region peer on specified store
         pd_url = "http://%s/pd/api/v1" % pd_addr
         for peer in self.peers:
