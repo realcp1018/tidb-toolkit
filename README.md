@@ -25,7 +25,6 @@ override = false
 # Run 
 python3 scripts/tk_flashback.py -f conf/tidb.toml
 ```
-
 ###### 2. Execute "delete from where ..." on table tb1kb_1(which has billions of records)
 ```
 # update tidb.toml's [massive_dml] part
@@ -38,7 +37,6 @@ execute = false
 python3 scripts/tk_massive_dml.py -f conf/tidb.toml
 # make sure the result sql is correct, then set execute to true and rerun
 ```
-
 ###### 3. Show Store/Reions info of a cluster(no need for tidb.toml)  
 ```
 # Examples:
