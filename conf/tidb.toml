@@ -22,7 +22,7 @@ max_workers = 20
 # 可选配置(true/false)，设置恢复完毕后是否使用恢复的出来的表覆盖原表
 override = false
 
-[massive_dml]
+[large_trans]
 # 必填配置，要操作的table所属db
 db = ""
 # 必填配置，dml sql直接操作的表名，不能使用db.table格式
