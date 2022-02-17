@@ -43,7 +43,7 @@ python3 scripts/tidb_massive_dml.py -f conf/tidb.toml
 ```
 # Examples:
 python tidb_store_region.py -u <your pd ip:port> -o showStores
-StoreAddr         StoreID        State          LCt/RCt        LWt/RWt        StartTime                     
----------         -------        -----          -------        -------        ---------                     
-<store_addr>      1015857        Down           0/34145        0/0            2021-12-12T22:00:45+08:00 
+StoreAddr     StoreID     State      LCt/RCt    LWt/RWt    StartTime                     
+---------     -------     -----      -------    -------    ---------                     
+<store_addr>  1015857     Down       0/34145    0/0        2021-12-12T22:00:45+08:00 
 ```
