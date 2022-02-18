@@ -55,23 +55,20 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
-        stores = [s.store_id for s in Store.from_api_all(pd_addr=self.__url)]
-        if self.__storeID not in stores:
-            print("Store ID %d not exist!" % self.__storeID)
-            exit(1)
-        store = Store.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
-        # Output Demo:
-        # Glossary: LCt->LeaderCount  RCt->RegionCount  LWt:->LeaderWeight  RWt:->RegionWeight
-        # StoreID   StoreAddr           State   LCt/RCt         LWt/RWt   StartTime
-        # -------   ---------           -----   -------         -------   ---------
-        print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("StoreID", "StoreAddr", "State", "LCt/RCt", "LWt/RWt",
-                                                  "StartTime"))
-        print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("-------", "---------", "-----", "-------", "-------",
-                                                  "---------"))
-        print("%-15s%-30s%-15s%-15s%-15s%-30s" % (store.store_id, store.address, store.state_name,
-                                                  "%s/%s" % (store.leader_count, store.region_count),
-                                                  "%s/%s" % (store.leader_weight, store.region_weight),
-                                                  store.start_ts))
+        stores = Store.from_api_all(pd_addr=self.__url)
+        for store in stores:
+            if store.store_id == self.__storeID:
+                print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("StoreID", "StoreAddr", "State", "LCt/RCt", "LWt/RWt",
+                                                          "StartTime"))
+                print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("-------", "---------", "-----", "-------", "-------",
+                                                          "---------"))
+                print("%-15s%-30s%-15s%-15s%-15s%-30s" % (store.store_id, store.address, store.state_name,
+                                                          "%s/%s" % (store.leader_count, store.region_count),
+                                                          "%s/%s" % (store.leader_weight, store.region_weight),
+                                                          store.start_ts))
+                return
+        print("Store ID %d not exist!" % self.__storeID)
+        exit(1)
 
     # 展示所有store信息
     def showStores(self):
@@ -86,7 +83,7 @@ class OptionHandler(object):
                                                       "%s/%s" % (store.leader_weight, store.region_weight),
                                                       store.start_ts))
 
-    # 展示单个regions信息
+    # 展示单个region信息
     def showRegion(self):
         if not self.__regionID:
             print("Region ID should be specified!")
