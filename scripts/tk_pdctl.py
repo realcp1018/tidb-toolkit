@@ -9,7 +9,7 @@ import json
 import requests
 from utils.logger import StreamLogger
 from utils.formatter import Formatter
-from .utils.color import Color
+from utils.color import Color
 from time import sleep
 from pprint import pprint
 from typing import List
