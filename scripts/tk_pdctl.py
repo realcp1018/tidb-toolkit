@@ -9,6 +9,7 @@ import json
 import requests
 from utils.logger import StreamLogger
 from utils.formatter import Formatter
+from .utils.color import Color
 from time import sleep
 from pprint import pprint
 from typing import List
@@ -23,8 +24,9 @@ STORE_STORE_OMITTED_ATTRS = ["state", "peer_address"]
 # TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
 #                     -> remove peer/peers when len(Region peers on Up stores after removed)>=2
 
-# Logger
+# Logger and Color
 logger = StreamLogger()
+color = Color()
 
 
 # arg parse
@@ -73,7 +75,7 @@ class OptionHandler(object):
         replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
         label_rules = replication_config.get('location-labels')
         label_force_match = replication_config.get('strictly-match-label')
-        print("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
+        color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
         stores = Store.from_api_all(pd_addr=self.__url)
         self.__store_formatter.print_header()
         for store in stores:
@@ -93,7 +95,7 @@ class OptionHandler(object):
         replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
         label_rules = replication_config.get('location-labels')
         label_force_match = replication_config.get('strictly-match-label')
-        print("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
+        color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
         stores = Store.from_api_all(pd_addr=self.__url)
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
@@ -149,7 +151,7 @@ class OptionHandler(object):
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
-        print("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
+        color.print_red("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j <= self.__limit:
@@ -177,7 +179,7 @@ class OptionHandler(object):
 
     def showRegionsNoLeader(self):
         regions = Region.from_api_all(pd_addr=self.__url)
-        print("# RegionsNoLeader(limit {0}):".format(self.__limit))
+        color.print_red("# RegionsNoLeader(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j <= self.__limit:
@@ -209,10 +211,7 @@ class OptionHandler(object):
             print("Error: Store ID should be specified!")
             exit(1)
         regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
-        # Output Demo:
-        # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
-        # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
-        print("# top {0} Regions(limit {0}):".format(self.__limit))
+        color.print_red("# Top {0} Regions(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]

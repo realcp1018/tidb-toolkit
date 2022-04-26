@@ -2,6 +2,7 @@
 # @Time: 2022/4/26 18:39
 # @Author: forevermessi@foxmail.com
 from typing import Dict
+from .color import Color
 
 
 class Formatter(object):
@@ -33,8 +34,9 @@ class Formatter(object):
                 return line
 
             header_cutlines.append(line_add_func(len(k)))
-        print(self.__column_name_format % tuple(header_columns))
-        print(self.__column_name_format % tuple(header_cutlines))
+        c = Color()
+        c.print_yellow(self.__column_name_format % tuple(header_columns))
+        c.print_yellow(self.__column_name_format % tuple(header_cutlines))
 
     def print_line(self, column_values: list):
         """
