@@ -8,18 +8,22 @@ import argparse
 import json
 import requests
 from utils.logger import StreamLogger
+from utils.formatter import Formatter
 from time import sleep
 from pprint import pprint
 from typing import List
 
-# const
-All_Support_Actions = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions",
-                       "showRegions1Peer", "showRegions2Peer", "showRegions3Peer", "showRegions4Peer",
-                       "showRegionsNoLeader", "removeRegionPeer", "removeStorePeers"]
-# TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
-#                        remove peer/peers when len(Region peers on Up stores after removed)>=2
+# Const
+ALL_SUPPORT_ACTIONS = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions", "showRegions1Peer",
+                       "showRegions2Peer", "showRegions3Peer", "showRegions4Peer", "showRegionsNoLeader",
+                       "removeRegionPeer", "removeStorePeers"]
+STORE_STATUS_OMITTED_ATTRS = ["sending_snap_count", "receiving_snap_count"]
+STORE_STORE_OMITTED_ATTRS = ["state", "peer_address"]
 
-# logger
+# TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
+#                     -> remove peer/peers when len(Region peers on Up stores after removed)>=2
+
+# Logger
 logger = StreamLogger()
 
 
@@ -32,7 +36,7 @@ def argParse():
                         help="Store ID")
     parser.add_argument("-r", "--region_id", dest="regionID", metavar="<region-id>", type=int,
                         help="Region ID")
-    parser.add_argument("-o", dest="option", required=True, choices=All_Support_Actions,
+    parser.add_argument("-o", dest="option", required=True, choices=ALL_SUPPORT_ACTIONS,
                         help="Store/Region Actions")
     parser.add_argument("-l", "--limit", dest="limit", metavar="<limit-size>", type=int, default=5,
                         help="Region show limit(default 5)")
@@ -49,55 +53,62 @@ class OptionHandler(object):
         self.__option = option
         self.__limit = limit
         self.__interval = interval
+        # 各种打印各种信息所需的formatter
+        self.__store_formatter = Formatter(
+            column_definition={
+                "StoreAddr": 25, "StoreID": 15, "State": 10, "LCt/RCt": 15, "LWt/RWt": 10, "StartTime": 30,
+                "label": 64
+            })
+        self.__region_formatter = Formatter(
+            column_definition={
+                "RegionID": 15, "StoreList": 40, "Leader": 15, "LeaderAddr": 30, "DownPeersStoreID": 25,
+                "PendingPeersStoreID": 25, "Size": 10, "Keys": 10
+            })
 
     # 展示单个store信息
     def showStore(self):
         if not self.__storeID:
-            print("Store ID should be specified!")
+            print("Error: Store ID should be specified!")
             exit(1)
+        replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
+        label_rules = replication_config.get('location-labels')
+        label_force_match = replication_config.get('strictly-match-label')
+        print("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
         stores = Store.from_api_all(pd_addr=self.__url)
+        self.__store_formatter.print_header()
         for store in stores:
             if store.store_id == self.__storeID:
-                print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("StoreID", "StoreAddr", "State", "LCt/RCt", "LWt/RWt",
-                                                          "StartTime"))
-                print("%-15s%-30s%-15s%-15s%-15s%-30s" % ("-------", "---------", "-----", "-------", "-------",
-                                                          "---------"))
-                print("%-15s%-30s%-15s%-15s%-15s%-30s" % (store.store_id, store.address, store.state_name,
-                                                          "%s/%s" % (store.leader_count, store.region_count),
-                                                          "%s/%s" % (store.leader_weight, store.region_weight),
-                                                          store.start_ts))
+                self.__store_formatter.print_line((store.address, store.store_id, store.state_name,
+                                                   "%s/%s" % (store.leader_count, store.region_count),
+                                                   "%s/%s" % (store.leader_weight, store.region_weight),
+                                                   store.start_ts,
+                                                   [{l.get('key'): l.get('value')} for l in store.labels])
+                                                  )
                 return
-        print("Store ID %d not exist!" % self.__storeID)
+        print("Error: Store ID %d not exist!" % self.__storeID)
         exit(1)
 
     # 展示所有store信息
     def showStores(self):
+        replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
+        label_rules = replication_config.get('location-labels')
+        label_force_match = replication_config.get('strictly-match-label')
+        print("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
         stores = Store.from_api_all(pd_addr=self.__url)
-        print("%-30s%-15s%-15s%-15s%-15s%-30s" % ("StoreAddr", "StoreID", "State", "LCt/RCt", "LWt/RWt",
-                                                  "StartTime"))
-        print("%-30s%-15s%-15s%-15s%-15s%-30s" % ("---------", "-------", "-----", "-------", "-------",
-                                                  "---------"))
+        self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
-            print("%-30s%-15s%-15s%-15s%-15s%-30s" % (store.address, store.store_id, store.state_name,
-                                                      "%s/%s" % (store.leader_count, store.region_count),
-                                                      "%s/%s" % (store.leader_weight, store.region_weight),
-                                                      store.start_ts))
+            self.__store_formatter.print_line((store.address, store.store_id, store.state_name,
+                                               "%s/%s" % (store.leader_count, store.region_count),
+                                               "%s/%s" % (store.leader_weight, store.region_weight),
+                                               store.start_ts,  [{l.get('key'): l.get('value')} for l in store.labels]))
 
     # 展示单个region信息
     def showRegion(self):
         if not self.__regionID:
-            print("Region ID should be specified!")
+            print("Error: Region ID should be specified!")
             exit(1)
         region: Region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
-        # Output Demo:
-        # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
-        # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
-                                                            "LeaderAddr", "DownPeersStoreID",
-                                                            "PendingPeersStoreID", "Size", "Keys"))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
-                                                            "----------", "----------------",
-                                                            "-------------------", "----", "----"))
+        self.__region_formatter.print_header()
         storeList: List[int] = [p["store_id"] for p in region.peers]
         leader: int = region.leader.get("store_id") if region.leader else None
         leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
@@ -109,24 +120,15 @@ class OptionHandler(object):
             PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
         else:
             PendingPeersStoreID = []
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
-                                                            leaderAddr, downPeersStoreID,
-                                                            PendingPeersStoreID, region.approximate_size,
-                                                            region.approximate_keys))
+        self.__region_formatter.print_line(((region.region_id, storeList, leader,
+                                             leaderAddr, downPeersStoreID,
+                                             PendingPeersStoreID, region.approximate_size,
+                                             region.approximate_keys)))
 
     # 展示所有regions信息(默认输出前self.limit个)
     def showRegions(self):
         regions = Region.from_api_all_limit(pd_addr=self.__url, limit=self.__limit)
-        # Output Demo:
-        # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
-        # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
-        print("# topRead {0} Regions(limit {0}):".format(self.__limit))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
-                                                            "LeaderAddr", "DownPeersStoreID",
-                                                            "PendingPeersStoreID", "Size", "Keys"))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
-                                                            "----------", "----------------",
-                                                            "-------------------", "----", "----"))
+        self.__region_formatter.print_header()
         for region in regions:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader.get("store_id") if region.leader else None
@@ -139,21 +141,16 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
-                                                                leaderAddr, downPeersStoreID,
-                                                                PendingPeersStoreID,
-                                                                region.approximate_size,
-                                                                region.approximate_keys))
+            self.__region_formatter.print_line((region.region_id, storeList, leader,
+                                                leaderAddr, downPeersStoreID,
+                                                PendingPeersStoreID,
+                                                region.approximate_size,
+                                                region.approximate_keys))
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
         print("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
-                                                            "LeaderAddr", "DownPeersStoreID",
-                                                            "PendingPeersStoreID", "Size", "Keys"))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
-                                                            "----------", "----------------",
-                                                            "-------------------", "----", "----"))
+        self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j <= self.__limit:
             region = regions[i]
@@ -170,23 +167,18 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
-                                                                    leaderAddr, downPeersStoreID,
-                                                                    PendingPeersStoreID,
-                                                                    region.approximate_size,
-                                                                    region.approximate_keys))
+                self.__region_formatter.print_line((region.region_id, storeList, leader,
+                                                    leaderAddr, downPeersStoreID,
+                                                    PendingPeersStoreID,
+                                                    region.approximate_size,
+                                                    region.approximate_keys))
                 j += 1
             i += 1
 
     def showRegionsNoLeader(self):
         regions = Region.from_api_all(pd_addr=self.__url)
         print("# RegionsNoLeader(limit {0}):".format(self.__limit))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
-                                                            "LeaderAddr", "DownPeersStoreID",
-                                                            "PendingPeersStoreID", "Size", "Keys"))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
-                                                            "----------", "----------------",
-                                                            "-------------------", "----", "----"))
+        self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j <= self.__limit:
             region = regions[i]
@@ -203,30 +195,25 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
-                                                                    leaderAddr, downPeersStoreID,
-                                                                    PendingPeersStoreID,
-                                                                    region.approximate_size,
-                                                                    region.approximate_keys))
+                self.__region_formatter.print_line((region.region_id, storeList, leader,
+                                                    leaderAddr, downPeersStoreID,
+                                                    PendingPeersStoreID,
+                                                    region.approximate_size,
+                                                    region.approximate_keys))
                 j += 1
             i += 1
 
     # 展示某个storeID上的所有regions信息(默认输出前self.limit个)
     def showStoreRegions(self):
         if not self.__storeID:
-            print("Store ID should be specified!")
+            print("Error: Store ID should be specified!")
             exit(1)
         regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
         # Output Demo:
         # RegionID  StoreList       Leader   LeaderAddr          DownPeersStoreID   PendingPeersStoreID    Size   Keys
         # --------  ---------       ------   ----------          ----------------   -------------------    ----   ----
         print("# top {0} Regions(limit {0}):".format(self.__limit))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("RegionID", "StoreList", "Leader",
-                                                            "LeaderAddr", "DownPeersStoreID",
-                                                            "PendingPeersStoreID", "Size", "Keys"))
-        print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % ("--------", "---------", "------",
-                                                            "----------", "----------------",
-                                                            "-------------------", "----", "----"))
+        self.__region_formatter.print_header()
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader.get("store_id") if region.leader else None
@@ -239,16 +226,16 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            print("%-15s%-40s%-15s%-30s%-25s%-25s%-10s%-10s" % (region.region_id, storeList, leader,
-                                                                leaderAddr, downPeersStoreID,
-                                                                PendingPeersStoreID,
-                                                                region.approximate_size,
-                                                                region.approximate_keys))
+            self.__region_formatter.print_line((region.region_id, storeList, leader,
+                                                leaderAddr, downPeersStoreID,
+                                                PendingPeersStoreID,
+                                                region.approximate_size,
+                                                region.approximate_keys))
 
     # 移除指定self.regionID在self.storeID上的peer(副本)，一般用于删除异常副本，之后由tidb集群的raft机制自动补全3副本
     def removeRegionPeer(self):
         if not self.__storeID or not self.__regionID:
-            print("Both Store ID and Region ID should be specified!")
+            print("Error: Both Store ID and Region ID should be specified!")
             exit(1)
         region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
         isSuccess, respText = region.remove_peer(pd_addr=self.__url, store_id=self.__storeID)
@@ -355,14 +342,14 @@ class Store(object):
         for store in resp.json()["stores"]:
             cls_kwargs = {}
             for k, v in store["status"].items():
-                if k in ("sending_snap_count", "receiving_snap_count"):
+                if k in STORE_STATUS_OMITTED_ATTRS:
                     continue
                 else:
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k == "state":
+                elif k in STORE_STORE_OMITTED_ATTRS:
                     continue
                 else:
                     cls_kwargs[k] = v
@@ -381,14 +368,14 @@ class Store(object):
             if store["store"]["address"].split(":")[0] == ip:
                 cls_kwargs = {}
                 for k, v in store["status"].items():
-                    if k in ("sending_snap_count", "receiving_snap_count"):
+                    if k in STORE_STATUS_OMITTED_ATTRS:
                         continue
                     else:
                         cls_kwargs[k] = v
                 for k, v in store["store"].items():
                     if k == "id":
                         cls_kwargs["store_id"] = v
-                    elif k == "state":
+                    elif k in STORE_STORE_OMITTED_ATTRS:
                         continue
                     else:
                         cls_kwargs[k] = v
@@ -406,14 +393,14 @@ class Store(object):
         cls_kwargs = {}
         try:
             for k, v in store["status"].items():
-                if k in ("sending_snap_count", "receiving_snap_count"):
+                if k in STORE_STATUS_OMITTED_ATTRS:
                     continue
                 else:
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k == "state":
+                elif k in STORE_STORE_OMITTED_ATTRS:
                     continue
                 else:
                     cls_kwargs[k] = v
@@ -538,3 +525,4 @@ if __name__ == '__main__':
     args = argParse()
     optionHandler = OptionHandler(args.url, args.storeID, args.regionID, args.option, args.limit, args.interval)
     optionHandler.run()
+
