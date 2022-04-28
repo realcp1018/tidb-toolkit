@@ -59,12 +59,12 @@ class OptionHandler(object):
         self.__store_formatter = Formatter(
             column_definition={
                 "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "StartTime": 30,
-                "label": 64
+                "Labels": 64
             })
         self.__region_formatter = Formatter(
             column_definition={
                 "RegionID": 15, "StoreList": 40, "Leader": 15, "LeaderAddr": 30, "DownPeersStoreID": 25,
-                "PendingPeersStoreID": 25, "Size": 10, "Keys": 10
+                "PendingPeersStoreID": 25, "Size(MB)": 10, "Keys": 10
             })
 
     # 展示单个store信息
