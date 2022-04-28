@@ -58,7 +58,7 @@ class OptionHandler(object):
         # 各种打印各种信息所需的formatter
         self.__store_formatter = Formatter(
             column_definition={
-                "StoreAddr": 25, "StoreID": 15, "State": 10, "LCt/RCt": 15, "LWt/RWt": 10, "StartTime": 30,
+                "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "StartTime": 30,
                 "label": 64
             })
         self.__region_formatter = Formatter(
