@@ -76,7 +76,7 @@ class OptionHandler(object):
         label_rules = replication_config.get('location-labels')
         label_force_match = replication_config.get('strictly-match-label')
         color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
-        stores = Store.from_api_all(pd_addr=self.__url)
+        stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
         self.__store_formatter.print_header()
         for store in stores:
             if store.store_id == self.__storeID:
@@ -96,7 +96,7 @@ class OptionHandler(object):
         label_rules = replication_config.get('location-labels')
         label_force_match = replication_config.get('strictly-match-label')
         color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
-        stores = Store.from_api_all(pd_addr=self.__url)
+        stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
             self.__store_formatter.print_line((store.address, store.store_id, store.state_name,
