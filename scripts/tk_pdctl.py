@@ -331,10 +331,13 @@ class Store(object):
         self.slow_score = slow_score
 
     @classmethod
-    def from_api_all(cls, pd_addr):
+    def from_api_all(cls, pd_addr, all_state=True):
         all_stores = list()
-        pd_url = "http://%s/pd/api/v1" % pd_addr
-        resp = requests.get("%s/stores" % pd_url, headers={"content-type": "application/json"})
+        if all_state:
+            pd_url = "http://%s/pd/api/v1/stores?state=0&state=1&state=2" % pd_addr
+        else:
+            pd_url = "http://%s/pd/api/v1/stores" % pd_addr
+        resp = requests.get(pd_url, headers={"content-type": "application/json"})
         # pprint(resp.json())
         if resp.status_code != 200:
             raise Exception(resp.text)
@@ -356,10 +359,13 @@ class Store(object):
         return all_stores
 
     @classmethod
-    def from_api_ip(cls, pd_addr, ip):
+    def from_api_ip(cls, pd_addr, ip, all_state=True):
         all_stores = list()
-        pd_url = "http://%s/pd/api/v1" % pd_addr
-        resp = requests.get("%s/stores" % pd_url, headers={"content-type": "application/json"})
+        if all_state:
+            pd_url = "http://%s/pd/api/v1/stores?state=0&state=1&state=2" % pd_addr
+        else:
+            pd_url = "http://%s/pd/api/v1/stores" % pd_addr
+        resp = requests.get(pd_url, headers={"content-type": "application/json"})
         if resp.status_code != 200:
             raise Exception(resp.text)
         # pprint(resp.json())
