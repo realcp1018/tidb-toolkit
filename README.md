@@ -27,14 +27,14 @@ python3 scripts/tk_flashback.py -f conf/tidb.toml
 ```
 ###### 2. Execute "delete from where ..." on table tb1kb_1(which has billions of records)
 ```
-# update tidb.toml's [large_trans] part
+# update tidb.toml's [dml] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
 execute = false
 
 # execute = false means: just print the first batch's SQL, no running
-python3 scripts/tk_large_trans.py -f conf/tidb.toml
+python3 scripts/tk_dml.py -f conf/tidb.toml
 # make sure the result sql is correct, then set execute to true and rerun
 ```
 ###### 3. Show Store/Reions info of a cluster(no need for tidb.toml)  

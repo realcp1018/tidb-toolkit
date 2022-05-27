@@ -57,14 +57,14 @@ class Config(object):
         self.port = config["basic"]["port"]
         self.user = config["basic"]["user"]
         self.password = config["basic"]["password"]
-        self.db = config["large_trans"]["db"]
-        self.table = config["large_trans"]["table"]
-        self.sql = config["large_trans"]["sql"]
-        self.start_rowid = config["large_trans"].get("start_rowid", None)
-        self.end_rowid = config["large_trans"].get("end_rowid", None)
-        self.batch_size = config["large_trans"].get("batch_size", 1000)
-        self.max_workers = config["large_trans"].get("max_workers", 50)
-        self.execute = config["large_trans"].get("execute", False)
+        self.db = config["dml"]["db"]
+        self.table = config["dml"]["table"]
+        self.sql = config["dml"]["sql"]
+        self.start_rowid = config["dml"].get("start_rowid", None)
+        self.end_rowid = config["dml"].get("end_rowid", None)
+        self.batch_size = config["dml"].get("batch_size", 1000)
+        self.max_workers = config["dml"].get("max_workers", 50)
+        self.execute = config["dml"].get("execute", False)
         if self.log_file is None:
             self.log_file = f"{self.host}.log.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 

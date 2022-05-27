@@ -18,7 +18,7 @@ from typing import List
 ALL_SUPPORT_ACTIONS = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions", "showRegions1Peer",
                        "showRegions2Peer", "showRegions3Peer", "showRegions4Peer", "showRegionsNoLeader",
                        "removeRegionPeer", "removeStorePeers"]
-STORE_STATUS_OMITTED_ATTRS = ["sending_snap_count", "receiving_snap_count"]
+STORE_STATUS_OMITTED_ATTRS = ["sending_snap_count", "receiving_snap_count", "is_busy"]
 STORE_STORE_OMITTED_ATTRS = ["state", "peer_address"]
 
 # TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
