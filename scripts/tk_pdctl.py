@@ -154,7 +154,7 @@ class OptionHandler(object):
         color.print_red("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
-        while i < len(regions) and j <= self.__limit:
+        while i < len(regions) and j < self.__limit:
             region = regions[i]
             if len(region.peers) == n:
                 storeList = [p["store_id"] for p in region.peers]
@@ -182,7 +182,7 @@ class OptionHandler(object):
         color.print_red("# RegionsNoLeader(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
-        while i < len(regions) and j <= self.__limit:
+        while i < len(regions) and j < self.__limit:
             region = regions[i]
             if not region.leader:
                 storeList = [p["store_id"] for p in region.peers]
