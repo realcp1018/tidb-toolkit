@@ -40,7 +40,7 @@ python3 scripts/tk_dml.py -f conf/tidb.toml
 ###### 3. Show Store/Reions info of a cluster(no need for tidb.toml)  
 ```
 # Examples:
-python tk_pdctl.py -u <your pd ip:port> -o showStores
+python tk_pdctl.py -u <pd ip:port> -o showStores
 StoreAddr     StoreID     State      LCt/RCt    LWt/RWt    StartTime                     
 ---------     -------     -----      -------    -------    ---------                     
 <store_addr>  1015857     Down       0/34145    0/0        2021-12-12T22:00:45+08:00 
