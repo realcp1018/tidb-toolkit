@@ -15,14 +15,12 @@ from pprint import pprint
 from typing import List
 
 # Const
-ALL_SUPPORT_ACTIONS = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions", "showRegions1Peer",
-                       "showRegions2Peer", "showRegions3Peer", "showRegions4Peer", "showRegionsNoLeader",
-                       "removeRegionPeer", "removeStorePeers"]
-STORE_STATUS_OMITTED_ATTRS = ["sending_snap_count", "receiving_snap_count", "is_busy"]
-STORE_STORE_OMITTED_ATTRS = ["state", "peer_address"]
+ALL_SUPPORT_ACTIONS = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions",
+                       "showRegions1Peer", "showRegions2Peer", "showRegions3Peer", "showRegions4Peer",
+                       "showRegionsNoLeader", "removeRegionPeer", "removeStorePeers"]
 
-# TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers
-#                     -> remove peer/peers when len(Region peers on Up stores after removed)>=2
+# TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers: remove peer/peers when len(Region peers on Up
+#  stores after removed)>=2
 
 # Logger and Color
 logger = StreamLogger()
@@ -31,19 +29,19 @@ color = Color()
 
 # arg parse
 def argParse():
-    parser = argparse.ArgumentParser(description="PD HTTP API store/region info formatter.")
-    parser.add_argument("-u", dest="url", metavar="<ip:port>", required=True,
-                        help="PD Addr(ip:port)")
-    parser.add_argument("-s", "--store_id", dest="storeID", metavar="<store-id>", type=int,
-                        help="Store ID")
-    parser.add_argument("-r", "--region_id", dest="regionID", metavar="<region-id>", type=int,
-                        help="Region ID")
-    parser.add_argument("-o", dest="option", required=True, choices=ALL_SUPPORT_ACTIONS,
-                        help="Store/Region Actions")
-    parser.add_argument("-l", "--limit", dest="limit", metavar="<limit-size>", type=int, default=5,
-                        help="Region show limit(default 5)")
-    parser.add_argument("-t", "--interval-time", dest="interval", metavar="<interval>", type=int,
-                        default=3, help="Operator create interval(seconds), default 3")
+    parser = argparse.ArgumentParser(description="pd http api store/region info formatter.")
+    parser.add_argument("-u", metavar="<pd-addr>", dest="url", required=True, type=str,
+                        help="pd addr, format ip:port, for example 127.0.0.1:2379")
+    parser.add_argument("-o", metavar="<option>", dest="option", choices=ALL_SUPPORT_ACTIONS, default="showStores",
+                        help="store/region options, default `showStores`, Options: %s" % ALL_SUPPORT_ACTIONS)
+    parser.add_argument("-s", metavar="<store-id>", dest="storeID", type=int,
+                        help="store id")
+    parser.add_argument("-r", metavar="<region-id>", dest="regionID", type=int,
+                        help="region id")
+    parser.add_argument("-l", metavar="<limit>", dest="limit", type=int, default=5,
+                        help="region show limit, default 5")
+    parser.add_argument("-t", metavar="<interval>", dest="interval", type=int,
+                        default=3, help="operator create interval(seconds), default 3")
     return parser.parse_args()
 
 
@@ -332,6 +330,7 @@ class Store(object):
 
     @classmethod
     def from_api_all(cls, pd_addr, all_state=True):
+        store_proto = Store()
         all_stores = list()
         if all_state:
             pd_url = "http://%s/pd/api/v1/stores?state=0&state=1&state=2" % pd_addr
@@ -344,14 +343,14 @@ class Store(object):
         for store in resp.json()["stores"]:
             cls_kwargs = {}
             for k, v in store["status"].items():
-                if k in STORE_STATUS_OMITTED_ATTRS:
+                if k not in store_proto.__dir__():
                     continue
                 else:
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k in STORE_STORE_OMITTED_ATTRS:
+                elif k not in store_proto.__dir__():
                     continue
                 else:
                     cls_kwargs[k] = v
@@ -360,6 +359,7 @@ class Store(object):
 
     @classmethod
     def from_api_ip(cls, pd_addr, ip, all_state=True):
+        store_proto = Store()
         all_stores = list()
         if all_state:
             pd_url = "http://%s/pd/api/v1/stores?state=0&state=1&state=2" % pd_addr
@@ -373,14 +373,14 @@ class Store(object):
             if store["store"]["address"].split(":")[0] == ip:
                 cls_kwargs = {}
                 for k, v in store["status"].items():
-                    if k in STORE_STATUS_OMITTED_ATTRS:
+                    if k not in store_proto.__dir__():
                         continue
                     else:
                         cls_kwargs[k] = v
                 for k, v in store["store"].items():
                     if k == "id":
                         cls_kwargs["store_id"] = v
-                    elif k in STORE_STORE_OMITTED_ATTRS:
+                    elif k not in store_proto.__dir__():
                         continue
                     else:
                         cls_kwargs[k] = v
@@ -389,6 +389,7 @@ class Store(object):
 
     @classmethod
     def from_api_storeid(cls, pd_addr, store_id):
+        store_proto = Store()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/store/%d" % (pd_url, store_id), headers={"content-type": "application/json"})
         # pprint(resp.json())
@@ -398,14 +399,14 @@ class Store(object):
         cls_kwargs = {}
         try:
             for k, v in store["status"].items():
-                if k in STORE_STATUS_OMITTED_ATTRS:
+                if k not in store_proto.__dir__():
                     continue
                 else:
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k in STORE_STORE_OMITTED_ATTRS:
+                elif k not in store_proto.__dir__():
                     continue
                 else:
                     cls_kwargs[k] = v
@@ -436,6 +437,7 @@ class Region(object):
 
     @classmethod
     def from_api_all(cls, pd_addr):
+        region_proto = Region()
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions" % pd_url, headers={"content-type": "application/json"})
@@ -447,6 +449,8 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
+                elif k not in region_proto.__dir__():
+                    continue
                 else:
                     cls_kwargs[k] = v
             all_regions.append(cls(**cls_kwargs))
@@ -454,6 +458,7 @@ class Region(object):
 
     @classmethod
     def from_api_all_limit(cls, pd_addr, limit=5):
+        region_proto = Region()
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions/readflow?limit=%d" % (pd_url, limit),
@@ -466,6 +471,8 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
+                elif k not in region_proto.__dir__():
+                    continue
                 else:
                     cls_kwargs[k] = v
             all_regions.append(cls(**cls_kwargs))
@@ -473,6 +480,7 @@ class Region(object):
 
     @classmethod
     def from_api_regionid(cls, pd_addr, region_id):
+        region_proto = Region()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/region/id/%d" % (pd_url, region_id), headers={"content-type": "application/json"})
         # pprint(resp.json())
@@ -486,12 +494,15 @@ class Region(object):
         for k, v in region.items():
             if k == "id":
                 cls_kwargs["region_id"] = v
+            elif k not in region_proto.__dir__():
+                continue
             else:
                 cls_kwargs[k] = v
         return cls(**cls_kwargs)
 
     @classmethod
     def from_api_storeid(cls, pd_addr, store_id):
+        region_proto = Region()
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/regions/store/%d" % (pd_url, store_id), headers={"content-type": "application/json"})
@@ -503,6 +514,8 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
+                elif k not in region_proto.__dir__():
+                    continue
                 else:
                     cls_kwargs[k] = v
             all_regions.append(cls(**cls_kwargs))
