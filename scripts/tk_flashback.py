@@ -102,7 +102,7 @@ class FlashBackOperator(object):
                 c.execute(sql)
                 rowid_shard_info = c.fetchone()[0]
                 if not rowid_shard_info.startswith("NOT_SHARDED"):
-                    log.warning("Rowid is sharded! Either AUTO_RANDOM or SHARD_ROW_ID_BITS was set, not supported!")
+                    log.error("Rowid is sharded! Either AUTO_RANDOM or SHARD_ROW_ID_BITS was set, not supported!")
                     sys.exit(1)
             except Exception as e:
                 if e.args[0] == 1054:
@@ -158,7 +158,7 @@ class FlashBackOperator(object):
                     for j in range(i, i + 200):
                         pool.submit(self.flashback_table_batch,
                                     rowid_column,
-                                    i + j)
+                                    j)
                 i += 200
         except Exception as e:
             log.error(e)
@@ -183,8 +183,8 @@ class FlashBackOperator(object):
         else:
             end_time = datetime.now()
             self.elapsed_time = end_time - self.start_time
-            log.info("\tFlashback table `%s` Done, find data in table `%s`.%s(Elapsed Time: %s)%s" \
-                     % (self.table, self.new_table, Color.font.yellow, self.elapsed_time, Color.display.default))
+            log.info("\tFlashback table `%s` Done, find data in table `%s`.(Elapsed Time: %s)" \
+                     % (self.table, self.new_table, self.elapsed_time))
 
 
 if __name__ == '__main__':
