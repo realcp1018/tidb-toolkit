@@ -12,15 +12,14 @@ import threading
 import argparse
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-from utils.color import Color
-from utils.config import Config
-
-color = Color()
+from .utils.config import Config
+from .utils.logger import FileLogger
 
 
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Flashback Table Tool.")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
+    parser.add_argument("-l", dest="log", type=str, help="Log File Name, Default <host>.log.<now>")
     args = parser.parse_args()
     return args
 
@@ -52,7 +51,7 @@ class FlashBackOperator(object):
             c.execute(sql)
             mysql_conn.commit()
         mysql_conn.close()
-        print("tikv_gc_run_interval/tikv_gc_life_time was set to %s ..." % gc_value)
+        log.info("tikv_gc_run_interval/tikv_gc_life_time was set to %s ..." % gc_value)
 
     def check_gc_safe_point(self):
         # check tikv_gc_safe_point
@@ -65,8 +64,8 @@ class FlashBackOperator(object):
         mysql_conn.close()
         tikv_gc_safe_point = datetime.strptime(tikv_gc_safe_point, '%Y%m%d-%H:%M:%S')
         if self.until_time <= tikv_gc_safe_point:
-            print("Specifed until_time(%s) is before tikv_gc_safe_point(%s), exit..." % (self.until_time,
-                                                                                         tikv_gc_safe_point))
+            log.info("Specifed until_time(%s) is before tikv_gc_safe_point(%s), exit..." % (self.until_time,
+                                                                                            tikv_gc_safe_point))
             sys.exit(1)
         else:
             # set tikv_gc_life_time to 720h
@@ -80,7 +79,7 @@ class FlashBackOperator(object):
             create_sql = c.fetchone()[1]
             c.execute("set @@tidb_snapshot=''")
             create_sql = create_sql.replace("CREATE TABLE `%s`" % self.table, "CREATE TABLE `%s`" % self.new_table)
-            color.print_yellow(create_sql)
+            log.info(create_sql)
             c.execute(create_sql)
             mysql_conn.commit()
         mysql_conn.close()
@@ -103,11 +102,11 @@ class FlashBackOperator(object):
                 c.execute(sql)
                 rowid_shard_info = c.fetchone()[0]
                 if not rowid_shard_info.startswith("NOT_SHARDED"):
-                    print("Rowid is sharded! Either AUTO_RANDOM or SHARD_ROW_ID_BITS was set, not supported!")
+                    log.warning("Rowid is sharded! Either AUTO_RANDOM or SHARD_ROW_ID_BITS was set, not supported!")
                     sys.exit(1)
             except Exception as e:
                 if e.args[0] == 1054:
-                    print("Warning: TiDB version <=4.0.0, Please check if Rowid was sharded before execution!")
+                    log.warning("Warning: TiDB version <=4.0.0, Please check if Rowid was sharded before execution!")
                     pass
                 else:
                     raise e
@@ -137,21 +136,21 @@ class FlashBackOperator(object):
                     # c.execute("set @@allow_auto_random_explicit_insert = true")
                     c.executemany(insert_sql, result)
                     mysql_conn.commit()
-                    print("\t%s\t(%d rows processed)..." % (query, len(result)))
+                    log.info("\t%s\t(%d rows processed)..." % (query, len(result)))
                 else:
-                    # print("\t%s\t(0 rows processed)..." % query)
+                    # log.info("\t%s\t(0 rows processed)..." % query)
                     pass
             mysql_conn.close()
 
     def flashback_table(self):
         self.create_new_table()
         rowid_column, max_rowid = self.get_rowid_info()
-        print("Flashbacking table `%s`(%d rows estimated]) to `%s`..." % (self.table,
-                                                                          max_rowid if max_rowid else 0,
-                                                                          self.new_table))
+        log.info("Flashbacking table `%s`(%d rows estimated]) to `%s`..." % (self.table,
+                                                                             max_rowid if max_rowid else 0,
+                                                                             self.new_table))
         try:
             max_thread_count = max_rowid // self.batch_size + 1 if max_rowid else 0
-            print("[MAX_THREAD_COUNT: %d]" % max_thread_count)
+            log.info("[MAX_THREAD_COUNT: %d]" % max_thread_count)
             i = 0
             while i < max_thread_count:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
@@ -162,49 +161,51 @@ class FlashBackOperator(object):
                                     i + j)
                 i += 200
         except Exception as e:
-            print(e)
-            print("\tFlashbacking table `%s` failed, exit..." % self.table)
+            log.error(e)
+            log.info("\tFlashbacking table `%s` failed, exit..." % self.table)
             sys.exit(1)
 
     def check_override(self):
         if self.override:
-            print("\tWill override table `%s`..." % self.table)
+            log.info("\tWill override table `%s`..." % self.table)
             mysql_conn = pymysql.connect(**self.connect_info)
             with mysql_conn.cursor() as c:
-                print("\tDrop table `%s` if exists..." % self.table)
+                log.info("\tDrop table `%s` if exists..." % self.table)
                 c.execute("drop table if exists %s" % self.table)
-                print("\tRename table `%s` to `%s`..." % (self.new_table, self.table))
+                log.info("\tRename table `%s` to `%s`..." % (self.new_table, self.table))
                 c.execute("alter table %s rename to %s" % (self.new_table, self.table))
                 mysql_conn.commit()
             mysql_conn.close()
             end_time = datetime.now()
             self.elapsed_time = end_time - self.start_time
-            print("\tFlashback table `%s` Done.%s(Elapsed Time: %s)%s" % (self.table, Color.font.yellow,
-                                                                          self.elapsed_time, Color.display.default))
+            log.info("\tFlashback table `%s` Done.%s(Elapsed Time: %s)%s" % (self.table, Color.font.yellow,
+                                                                             self.elapsed_time, Color.display.default))
         else:
             end_time = datetime.now()
             self.elapsed_time = end_time - self.start_time
-            print("\tFlashback table `%s` Done, find data in table `%s`.%s(Elapsed Time: %s)%s" \
-                  % (self.table, self.new_table, Color.font.yellow, self.elapsed_time, Color.display.default))
+            log.info("\tFlashback table `%s` Done, find data in table `%s`.%s(Elapsed Time: %s)%s" \
+                     % (self.table, self.new_table, Color.font.yellow, self.elapsed_time, Color.display.default))
 
 
 if __name__ == '__main__':
     args = argParse()
-    config_file = args.config
-    conf = Config(config_file=config_file)
+    config_file, log_file = args.config, args.log
+    conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
+    log = FileLogger(filename=conf.log_file)
+    print(f"See logs in {conf.log_file} ...")
     try:
-        print("----------------------------------------------------------------------------------------------")
-        color.print_highlight("[Table `%s` Flashback]:" % conf.table)
+        log.info("----------------------------------------------------------------------------------------------")
+        log.info("[Table `%s` Flashback]:" % conf.table)
         operator = FlashBackOperator(config=conf)
-        print("Connect Info: %s@%s:%d ..." % (operator.user, operator.host, operator.port))
+        log.info("Connect Info: %s@%s:%d ..." % (operator.user, operator.host, operator.port))
         operator.check_gc_safe_point()
         operator.flashback_table()
         operator.check_override()
     except Exception as e:
-        color.print_red("Table flashback failed, please check!!!")
-        color.print_red("tikv_gc_life_time/tikv_gc_run_interval was set to 720h, Please recover it manually!")
+        log.error("Table flashback failed, please check!!!")
+        log.warning("tikv_gc_life_time/tikv_gc_run_interval was set to 720h, Please recover it manually!")
         raise
     else:
-        color.print_blue("FlashBack Done!")
-        color.print_red("tikv_gc_life_time/tikv_gc_run_interval was set to 720h, Please recover it manually!")
+        log.info("FlashBack Done!")
+        log.warning("tikv_gc_life_time/tikv_gc_run_interval was set to 720h, Please recover it manually!")

@@ -269,8 +269,8 @@ if __name__ == '__main__':
     config_file, log_file = args.config, args.log
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    log = FileLogger(filename=args.log)
-    print(f"See logs in {args.log} ...")
+    log = FileLogger(filename=conf.log_file)
+    print(f"See logs in {conf.log_file} ...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,
