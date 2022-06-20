@@ -12,8 +12,8 @@ import threading
 import argparse
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-from .utils.config import Config
-from .utils.logger import FileLogger
+from utils.config import Config
+from utils.logger import FileLogger
 
 
 def argParse():
