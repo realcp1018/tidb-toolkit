@@ -23,7 +23,7 @@ until_time = "2021-12-17 17:29:45"
 override = false
 
 # Run 
-python3 scripts/tk_flashback.py -f conf/tidb.toml
+python3 scripts/tk_flashback.py -f conf/tidb.toml > tb1kb_1.log
 ```
 ###### 2. Execute "delete from where ..." on table tb1kb_1(which has billions of records)
 ```
@@ -34,14 +34,15 @@ sql = "delete from tb1kb_1 where is_active=0;"
 execute = false
 
 # execute = false means: just print the first batch's SQL, no running
-python3 scripts/tk_dml.py -f conf/tidb.toml
+python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l 111.log
 # make sure the result sql is correct, then set execute to true and rerun
 ```
 ###### 3. Show Store/Reions info of a cluster(no need for tidb.toml)  
 ```
 # Examples:
 python tk_pdctl.py -u <pd ip:port> -o showStores
-StoreAddr     StoreID     State      LCt/RCt    LWt/RWt    StartTime                     
----------     -------     -----      -------    -------    ---------                     
-<store_addr>  1015857     Down       0/34145    0/0        2021-12-12T22:00:45+08:00 
+# Location-Label Rules: host (force: false)
+StoreAddr                StoreID        State          LCt/RCt        LWt/RWt   StartTime                     
+---------                -------        -----          -------        -------   ---------                    
+1.1.1.1:20171            6              Up             3370/10910     1/1       2020-11-19T09:18:06+08:00
 ```
