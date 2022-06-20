@@ -8,7 +8,7 @@ Usage:
         2.update <tale> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
     1.Make sure there's index on the split column.
-    2.SPlit column type should be int/bingint/date/datetime, if numerical, split_column_precision should also be specified.
+    2.Split column type should be int/bingint/date/datetime, if numerical, split_column_precision should also be specified.
     3.Make sure your sql has a where condition(even where 1=1)
 task/batch split points：
     SQL will be splitted into multiple tasks by split_column & split_interval
@@ -86,7 +86,7 @@ class MySQLConnectionPool(object):
         self.pool.put(conn)
 
     def start_monitor(self):
-        # 启动一个子线程来监控连接池的size
+        # start a monitor to report the pool size
         def report_size():
             while True:
                 log.info(f"ConnectionPool Monitor: Size {self.pool.qsize()}")
@@ -135,7 +135,7 @@ class SQLOperator(object):
                  split_column_precision=None,
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
-        self.sql = sql
+        self.sql = sql.strip(";")
         self.split_interval = int(split_interval) if split_interval else 86400
         self.split_column_precision = split_column_precision
         self.start_time = start_time
@@ -148,15 +148,14 @@ class SQLOperator(object):
     def validate(self):
         log.info("Validating SQL Start...")
         """
-        格式化SQL：
-        1.通过sqlparse.format进行空格与缩进符的标准化
-        2.不支持DML以外的SQL类型
-        3.不支持没有Where条件的SQL
-        4.检查split_column字段类型,只能是int/bigint或date/datetime类型，暂不支持其他类型
-            。如果为int/bigint类型那么将给定的start_time/end_time转为unix timestamp数字
-            。如果为date/datetime类型那么保持start_time/end_time不变(默认是%Y-%m-%d %H:%M:%S格式)
-            。如果为其他类型那么直接报错
-        5.如果未提供start_time/end_time，则将其默认值设置为min(split_column)/max(split_column)
+        1.use sqlparse.format to format sql
+        2.only SUPPORTED_SQL_TYPES are supported
+        3.exit when no where condition
+        4.check split_column data type,should be int/bigint/date/datetime
+            。if int/bigint, then start_time/end_time will be converted to unix timestamp
+            。if date/datetime, then do nothing
+            。if others, exit with error
+        5.if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)
         """
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
@@ -174,7 +173,6 @@ class SQLOperator(object):
             raise Exception("No where condition in SQL, exit...")
         # 4
         if self.table.split_column_datatype in ('int', 'bigint'):
-            # 判断下数据库中数字类型的时间精度
             try:
                 datetime.fromtimestamp(self.table.split_column_max)
             except OSError as e:
@@ -197,7 +195,6 @@ class SQLOperator(object):
     def run(self):
         log.info(f"Time Range [{self.start_time},{self.end_time}]")
         task_start_time = self.start_time
-        # 无论timestamp还是date/datetime类型，这里都可以直接进行加减判断，因为validate()中已经适配好了类型
         if self.execute:
             with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
                 while task_start_time < self.end_time:
@@ -209,7 +206,6 @@ class SQLOperator(object):
                         pool.submit(self.__run_task, task_start_time, task_end_time)
                         task_start_time = task_end_time
         else:
-            # 当不实际执行SQL只打印时，只跑1个task batch输出示例SQL即可:
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(self.__run_task, task_start_time, task_start_time + self.split_interval)
 
@@ -242,7 +238,7 @@ class SQLOperator(object):
         if self.execute:
             conn = self.connction_pool.get()
             try:
-                affected_rows = 1  # 设置一个非0初始值
+                affected_rows = 1
                 task_start = datetime.now()
                 while affected_rows > 0:
                     batch_start_time = datetime.now()

@@ -139,7 +139,7 @@ class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
                  max_workers=None, start_rowid=None, end_rowid=None, execute=None):
         self.table: Table = table
-        self.sql = sql
+        self.sql = sql.strip(";")
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.start_rowid = int(start_rowid) if start_rowid else self.table.rowid_min
