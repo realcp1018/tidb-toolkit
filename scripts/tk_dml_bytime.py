@@ -280,7 +280,7 @@ if __name__ == '__main__':
 
     # load table info
     conn = pool.get()
-    table = Table(table_name=args.table, db=args.db, split_column=args.split_column, conn=conn)
+    table = Table(table_name=conf.table, db=conf.db, split_column=conf.split_column, conn=conn)
     table.load()
     pool.put(conn)
 
