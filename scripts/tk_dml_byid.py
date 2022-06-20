@@ -3,15 +3,15 @@
 # @Author: forevermessi@foxmail.com
 """
 Usage:
-    支持以下几种大批量DML语句：
-        delete from <t> where <...>
-        update <t> set <...> where <...>
-        insert into <t_to> select <...> from <t_from> where <...>
-    默认使用_tidb_rowid(或数字主键)作为拆分列，不支持设置了SHARD_ROW_ID_BITS或auto_random的表
-    依据_tidb_rowid和batch_size和将SQL拆分为多个batch，并发max_workers个batch
+    Following sql types supported：
+        1.delete from <table> where <...>
+        2.update <tale> set <...> where <...>
+        3.insert into <table_target> select <...> from <table> where <...>
+    _tidb_rowid will be used as the default split column.
+    If table was sharded(SHARD_ROW_ID_BITS or auto_random used) use tk_dml_bytime instead.
+    SQL will be splited into multiple batches by _tidb_rowid&batch_size, there will be <max_workers> batches run simultaneously
 """
 import argparse
-import toml
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, Empty
@@ -24,49 +24,18 @@ import sqlparse
 import sqlparse.tokens as T
 
 from utils.logger import FileLogger
+from utils.config import Config
 
 # Global Constants
 SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 
 
 def argParse():
-    parser = argparse.ArgumentParser(description="TiDB Massive DML Tool.")
+    parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by id).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
     parser.add_argument("-l", dest="log", type=str, help="Log File Name, Default <host>.log.<now>")
     args = parser.parse_args()
     return args
-
-
-class Config(object):
-    def __init__(self, config_file, log_file=None):
-        # toml config file
-        self.config_file = config_file
-        # log file
-        self.log_file = log_file
-        # db connection info
-        self.host, self.port, self.user, self.password, self.db = None, None, None, None, None
-        # sql split info
-        self.table, self.sql, self.start_rowid, self.end_rowid, self.batch_size = None, None, None, None, None
-        # execute info
-        self.max_workers, self.execute = None, None
-
-    def parse(self):
-        with open(self.config_file, encoding='utf8') as f:
-            config = toml.load(f)
-        self.host = config["basic"]["host"]
-        self.port = config["basic"]["port"]
-        self.user = config["basic"]["user"]
-        self.password = config["basic"]["password"]
-        self.db = config["dml"]["db"]
-        self.table = config["dml"]["table"]
-        self.sql = config["dml"]["sql"]
-        self.start_rowid = config["dml"].get("start_rowid", None)
-        self.end_rowid = config["dml"].get("end_rowid", None)
-        self.batch_size = config["dml"].get("batch_size", 1000)
-        self.max_workers = config["dml"].get("max_workers", 50)
-        self.execute = config["dml"].get("execute", False)
-        if self.log_file is None:
-            self.log_file = f"{self.host}.log.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
 
 class MySQLConnectionPool(object):
@@ -112,7 +81,7 @@ class MySQLConnectionPool(object):
         self.pool.put(conn)
 
     def start_monitor(self):
-        # 启动一个子线程来监控连接池的size
+        # start a monitor to report the pool size
         def report_size():
             while True:
                 logger.info(f"ConnectionPool Monitor: Size {self.pool.qsize()}")
@@ -122,7 +91,7 @@ class MySQLConnectionPool(object):
         thd.start()
 
 
-# Table Which Batches Division Based On
+# Table on Which Batches Division Based
 class Table(object):
     def __init__(self, table_name=None, db=None, conn=None):
         self.name = table_name
@@ -140,10 +109,10 @@ class Table(object):
                   f"and table_name='{self.name}' and COLUMN_KEY='PRI';"
             c.execute(sql)
             pri_info = c.fetchall()
-            if len(pri_info) == 1 and pri_info[0][1] in ('int', 'bigint'):  # 没有主键时rowid也是_tidb_rowid
+            if len(pri_info) == 1 and pri_info[0][1] in ('int', 'bigint'):
                 self.rowid = pri_info[0][0]
             else:
-                self.rowid = "_tidb_rowid"
+                self.rowid = "_tidb_rowid"  # use _tidb_rowid when no primary or primary is not int
 
             sql = f"select TIDB_ROW_ID_SHARDING_INFO from information_schema.TABLES where TABLE_SCHEMA='{self.db}' " \
                   f"and TABLE_NAME='{self.name}'"
@@ -156,7 +125,8 @@ class Table(object):
                 if e.args[0] == 1054:
                     print("Warning: TiDB version <=4.0.0, Please check if Rowid was sharded before execution!")
                     pass
-                    # 小于4.0的版本没有TIDB_ROW_ID_SHARDING_INFO字段，因此打印一句警告，提示需要注意rowid是否分片
+                    # TIDB_ROW_ID_SHARDING_INFO not supported if tidb version <= 4.0，so print a warning here.
+                    # This warning told you to check table sharded info manually.
                 else:
                     raise e
             sql = f"select min({self.rowid}),max({self.rowid}) from {self.db}.{self.name};"
@@ -180,11 +150,10 @@ class SQLOperator(object):
     def validate(self):
         logger.info("Validating SQL Start...")
         """
-        格式化SQL：
-        1.通过sqlparse.format进行空格与缩进符的标准化
-        2.不支持DML以外的SQL类型
-        3.不支持未包含where条件的SQL
-        4.不支持设置了SHARD_ROW_ID_BITS或者auto_random的表
+        1.use sqlparse.format to format sql
+        2.only SUPPORTED_SQL_TYPES are supported
+        3.exit when no where condition
+        4.exit if table was sharded(SHARD_ROW_ID_BITS or auto_random)
         """
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,

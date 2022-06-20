@@ -1,53 +1,42 @@
 [basic]
-## required
+## all required
 host = "127.0.0.1"
-## required
 port = 4000
-## required
 user = "root"
-## required
 password = "root"
-
-[flashback]
-## required
-db = ""
-## required
-table =""
-## required，format example: "2020-01-01 00:00:00",should be later than tikv_gc_safe_point
-until_time = "2020-01-01 00:00:00"
-## batch size for a single thread，default 1000
-batch_size = 1000
-## concurrent running database connections, default 20
-max_workers = 20
-## true/false, overide original table or not after flashback
-override = false
-
-[dml]
-## required
-db = ""
-## required
-table = ""
-## required, only one sql a time
-sql = ""
-## min _tidb_rowid when split sql, default min(_tidb_rowid)
-# start_rowid =
-## max _tidb_rowid when split sql, default max(_tidb_rowid)
-# end_rowid =
+db = "test"
+table = "test"
 ## batch size for a single thread，default 1000
 batch_size = 1000
 ## concurrent running database connections, default 50
 max_workers = 50
+
+[flashback]
+## required，format example: "2020-01-01 00:00:00",should be later than tikv_gc_safe_point
+until_time = "2020-01-01 00:00:00"
+## true/false, overide original table or not after flashback, default false
+override = false
+
+[dml]
+## required, only one sql a time
+sql = ""
 ## true/false，execute or not(default: print the first batched sql and stop running, safe mode)
 execute = false
 
-[migrate]
-source_db =
-source_table =
-source_filter =
-target_type =
-target_host_port =
-target_user =
-target_password =
-target_table =
-execute = false
+[dml.by_id]
+## min _tidb_rowid when split sql, default min(_tidb_rowid)
+# start_rowid = 0
+## max _tidb_rowid when split sql, default max(_tidb_rowid)
+# end_rowid = 0
 
+[dml.by_time]
+## required, table field used for splitting, should be int/bigint/data/datetime
+split_column = ""
+## time precision when split_column is numerical, default 0(0->s, 3->ms, 6->μs)
+split_column_precision = 0
+## split interval in seconds, default 3600(one hour)
+split_interval = 3600
+## if set, please use format: "%Y-%m-%d %H:%M:%S", otherwise default min(split_column) will be used
+# start_time = "2020-01-01 00:00:00"
+## if set, please use format: "%Y-%m-%d %H:%M:%S", otherwise default max(split_column) will be used
+# end_time = "2021-01-01 00:00:00"
