@@ -1,48 +1,59 @@
 # Introduction
 Toolkits is for TiDB. 
 
-Like splitting large scale DML SQL into small batches, flashback full table based on tidb GC.  
-
 # Python Env
 ![](https://img.shields.io/static/v1?label=Python&message=3.6&color=green&?style=for-the-badge)
 
-## Prepare 
+#### Requirements 
 Run "python3 -m pip install -r requirements.txt" for dependencies.
 
-## Examples
-    
-Use independent tidb.toml for every single task:
-
-###### 1. Flashback table tb1kb_1
+# Examples
+##### 1. Flashback table tb1kb_1
 ```
-# tidb.toml's [basic] part is for all scripts.
-# update [flashback] part for flashback task：
+# edit tidb.toml basic and flashback part
+...
 db = "test"
 table ="tb1kb_1"
 until_time = "2021-12-17 17:29:45"
 override = false
-
-# Run 
-python3 scripts/tk_flashback.py -f conf/tidb.toml > tb1kb_1.log
+...
+# Run:
+python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
 ```
-###### 2. Execute "delete from where ..." on table tb1kb_1(which has billions of records)
+##### 2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)
 ```
-# update tidb.toml's [dml] part
+# update tidb.toml's basic, dml and dml.by_id part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
 execute = false
-
-# execute = false means: just print the first batch's SQL, no running
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l 111.log
+# Run:
+python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
+# execute = false: Do nothing except print the first batch's SQL 
 # make sure the result sql is correct, then set execute to true and rerun
 ```
-###### 3. Show Store/Reions info of a cluster(no need for tidb.toml)  
+##### 3. Execute "delete from where ..." on big table tb1kb_1(table sharded)
+```
+# update tidb.toml's basic, dml and dml.by_time part
+db = "test"
+table = "tb1kb_1"
+sql = "delete from tb1kb_1 where is_active=0;"
+# assume create_time type is int(timstamp in miliseconds)
+split_column = "create_time"
+split_column_precision = 3
+split_interval = 3600
+start_time = "2021-01-01 00:00:00"
+end_time = "2021-12-31 00:00:00"
+execute = false
+# Run:
+python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
+```
+##### 4. Show Store/Reions of a cluster
 ```
 # Examples:
 python tk_pdctl.py -u <pd ip:port> -o showStores
 # Location-Label Rules: host (force: false)
-StoreAddr                StoreID        State          LCt/RCt        LWt/RWt   StartTime                     
----------                -------        -----          -------        -------   ---------                    
-1.1.1.1:20171            6              Up             3370/10910     1/1       2020-11-19T09:18:06+08:00
+StoreAddr                StoreID        State          LCt/RCt        LWt/RWt 
+---------                -------        -----          -------        -------
+1.1.1.1:20171            6              Up             3370/10910     1/1    
 ```
