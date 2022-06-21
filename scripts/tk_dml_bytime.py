@@ -91,6 +91,7 @@ class MySQLConnectionPool(object):
             while True:
                 log.info(f"ConnectionPool Monitor: Size {self.pool.qsize()}")
                 sleep(5)
+
         thd = Thread(target=report_size, daemon=True)
         thd.start()
 
@@ -132,7 +133,7 @@ class Table(object):
 
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, sql=None, table: Table = None, split_interval=None,
-                 split_column_precision=None,
+                 split_column_precision=None, savepoint=None,
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
         self.sql = sql.strip(";")
@@ -144,6 +145,7 @@ class SQLOperator(object):
         self.max_workers = max_workers
         self.execute = execute
         self.connction_pool: MySQLConnectionPool = pool
+        self.savepoint = savepoint
 
     def validate(self):
         log.info("Validating SQL Start...")
@@ -171,7 +173,7 @@ class SQLOperator(object):
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
             raise Exception("No where condition in SQL, exit...")
-        # 4
+        # 4 & 5
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
                 datetime.fromtimestamp(self.table.split_column_max)
@@ -181,8 +183,10 @@ class SQLOperator(object):
                                     "split_column_precision(3 or 6, default 0)!")
                 else:
                     raise e
-            self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (10**self.split_column_precision) if self.start_time else self.table.split_column_min
-            self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (10**self.split_column_precision) if self.end_time else self.table.split_column_max
+            self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
+                        10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
+            self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
+                        10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
         elif self.table.split_column_datatype in ("date", "datetime"):
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S") if self.start_time else \
                 self.table.split_column_min
@@ -191,6 +195,7 @@ class SQLOperator(object):
             self.split_interval = timedelta(seconds=self.split_interval)
         else:
             raise Exception("Unsupported split column Data type: {self.table.split_column_datatype}!")
+        self.savepoint = self.start_time
 
     def run(self):
         log.info(f"Time Range [{self.start_time},{self.end_time}]")
@@ -198,7 +203,7 @@ class SQLOperator(object):
         if self.execute:
             with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
                 while task_start_time < self.end_time:
-                    task_end_time = task_start_time + self.split_interval * (10**self.split_column_precision)
+                    task_end_time = task_start_time + self.split_interval * (10 ** self.split_column_precision)
                     if task_end_time >= self.end_time:
                         pool.submit(self.__run_task, task_start_time, self.end_time)
                         break
@@ -253,11 +258,16 @@ class SQLOperator(object):
                     log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
             except Exception as e:
                 log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
+                self.report_savepoint(task_end_time=stop)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
         else:
             log.info(f"Task On [{start},{stop}) Dry Run:\nSQL: {batch_sql}")
+
+    def report_savepoint(self, task_end_time):
+        if (task_end_time - self.savepoint) <= self.split_interval * (10**self.split_column_precision):
+            log.info("savepoint: %s" % task_end_time)
 
 
 if __name__ == '__main__':

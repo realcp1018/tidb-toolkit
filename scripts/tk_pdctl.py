@@ -228,7 +228,6 @@ class OptionHandler(object):
                                                 region.approximate_size,
                                                 region.approximate_keys))
 
-    # 移除指定self.regionID在self.storeID上的peer(副本)，一般用于删除异常副本，之后由tidb集群的raft机制自动补全3副本
     def removeRegionPeer(self):
         if not self.__storeID or not self.__regionID:
             print("Error: Both Store ID and Region ID should be specified!")
@@ -241,7 +240,6 @@ class OptionHandler(object):
         else:
             logger.error(respText)
 
-    # 移除指定self.storeID上的所有peer(副本)，一般用于删除异常store上的副本，之后由tidb集群的raft机制自动补全3副本
     def removeStorePeers(self):
         if not self.__storeID:
             print("Store ID should be specified!")
@@ -265,7 +263,6 @@ class OptionHandler(object):
             sleep(self.__interval)
             i += 1
 
-    # 根据给定的option执行对应的指令
     def run(self):
         if self.__option == "showStore":
             self.showStore()

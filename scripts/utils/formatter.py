@@ -7,23 +7,14 @@ from .color import Color
 
 class Formatter(object):
     def __init__(self, column_definition: Dict[str, int]):
-        """
-        输入参数格式类似{column_name: column_max_len}， 例如{"name": 20， "sex": 1}
-        其中长度部分除数据长度外，还要考虑制表符部分的长度，例如假设name最大长度为15，那么剩下的长度5就相当于两列之间的空格长度
-        """
         self.__column_definition = column_definition
-        # 通用格式化占位符
         self.__column_name_format = ''
         for k, v in self.__column_definition.items():
             self.__column_name_format += f'%-{v}s'
-        # 理想中的格式化打印结果为：
-        # name     age    address   -->列名，列名长度+间距=column_max_len
-        # ----     ---    -------   -->分割线,其长度等同于各自列名的长度
-        # myname   11     ShangHai  -->具体数据，记录长度+间距=column_max_len
 
     def print_header(self):
-        header_columns = list()     # 列名打印
-        header_cutlines = list()    # 分割线打印
+        header_columns = list()
+        header_cutlines = list()
         for k, v in self.__column_definition.items():
             header_columns.append(k)
 

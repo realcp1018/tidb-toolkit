@@ -15,7 +15,7 @@ class Config(object):
         # flashback config
         self.until_time, self.override = None, None
         # dml config
-        self.sql, self.execute = None, None
+        self.sql, self.execute, self.savepoint = None, None, None
         # by id
         self.start_rowid, self.end_rowid = None, None
         # by time
@@ -41,6 +41,9 @@ class Config(object):
         self.override = config["flashback"].get("override", False)
         # dml config
         self.sql = config["dml"]["sql"]
+        self.savepoint = config["dml"].get("savepoint", None)
+        if not self.savepoint:
+            self.savepoint = f"{self.host}.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}.savepoint"
         self.execute = config["dml"].get("execute", False)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
