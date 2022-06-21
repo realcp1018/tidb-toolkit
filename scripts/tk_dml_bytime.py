@@ -133,7 +133,7 @@ class Table(object):
 
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, sql=None, table: Table = None, split_interval=None,
-                 split_column_precision=None, savepoint=None,
+                 split_column_precision=None,
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
         self.sql = sql.strip(";")
@@ -145,7 +145,6 @@ class SQLOperator(object):
         self.max_workers = max_workers
         self.execute = execute
         self.connction_pool: MySQLConnectionPool = pool
-        self.savepoint = savepoint
 
     def validate(self):
         log.info("Validating SQL Start...")
@@ -195,7 +194,6 @@ class SQLOperator(object):
             self.split_interval = timedelta(seconds=self.split_interval)
         else:
             raise Exception("Unsupported split column Data type: {self.table.split_column_datatype}!")
-        self.savepoint = self.start_time
 
     def run(self):
         log.info(f"Time Range [{self.start_time},{self.end_time}]")
@@ -258,16 +256,11 @@ class SQLOperator(object):
                     log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
             except Exception as e:
                 log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
-                self.report_savepoint(task_end_time=stop)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
         else:
             log.info(f"Task On [{start},{stop}) Dry Run:\nSQL: {batch_sql}")
-
-    def report_savepoint(self, task_end_time):
-        if (task_end_time - self.savepoint) <= self.split_interval * (10**self.split_column_precision):
-            log.info("savepoint: %s" % task_end_time)
 
 
 if __name__ == '__main__':
