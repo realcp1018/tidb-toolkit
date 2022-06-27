@@ -1,5 +1,10 @@
 # Introduction
 Toolkits is for TiDB. 
+1. Flashback the whole table to a time point which is before gc_safe_point.
+2. Run sql on a table which has billions of records, sql will be split into tasks/batches automatically.
+    * by id (use primary-key id or internal _tidb_rowid)
+    * by time (use a date/datetime/time-related numerical column)
+3. Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data distribution of your cluster.
 
 # Python
 ![](https://img.shields.io/static/v1?label=Python&message=3.6&color=green&?style=for-the-badge)
@@ -57,9 +62,8 @@ StoreAddr                StoreID        State          LCt/RCt        LWt/RWt ..
 ---------                -------        -----          -------        ------- ...
 1.1.1.1:20171            6              Up             3370/10910     1/1     ... 
 ```
----
 # Notes
-##### About tk_dml_byid.py and tk_dml_bytime.py:
+#### About tk_dml_byid.py and tk_dml_bytime.py:
 Following sql types supported：
 ```
 1.delete from <table> where <...>
