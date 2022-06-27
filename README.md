@@ -1,7 +1,7 @@
 # Introduction
 Toolkits is for TiDB. 
 
-# Python Env
+# Python
 ![](https://img.shields.io/static/v1?label=Python&message=3.6&color=green&?style=for-the-badge)
 
 #### Requirements 
@@ -53,7 +53,26 @@ python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
 # Examples:
 python tk_pdctl.py -u <pd ip:port> -o showStores
 # Location-Label Rules: host (force: false)
-StoreAddr                StoreID        State          LCt/RCt        LWt/RWt 
----------                -------        -----          -------        -------
-1.1.1.1:20171            6              Up             3370/10910     1/1    
+StoreAddr                StoreID        State          LCt/RCt        LWt/RWt ...
+---------                -------        -----          -------        ------- ...
+1.1.1.1:20171            6              Up             3370/10910     1/1     ... 
 ```
+---
+# Notes
+##### About tk_dml_byid.py and tk_dml_bytime.py:
+Following sql types supported：
+```
+1.delete from <table> where <...>
+2.update <table> set <...> where <...>
+3.insert into <target_table> select <...> from <source_table> where <...>
+```
+By id:
+>* _tidb_rowid will be used as the default split column.
+>* If table was sharded(SHARD_ROW_ID_BITS or auto_random used), use tk_dml_bytime instead.
+>* SQL will be splited into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously.
+
+By time:
+>* SQL will be splitted into multiple tasks by split_column & split_interval(new sqls with between statement on split column).
+>* Every task will run batches serially, default batch size is 1000(which means task sql will be suffixed by `limit 1000` and run multiple times until affected rows=0).
+>* There will be <max_workers> tasks run simultaneously.
+>* Run `grep Finished <log-name> | tail` to find out how many tasks finished.

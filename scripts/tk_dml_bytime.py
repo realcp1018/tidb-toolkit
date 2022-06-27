@@ -5,14 +5,14 @@
 Usage:
     Following sql types supported：
         1.delete from <table> where <...>
-        2.update <tale> set <...> where <...>
+        2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
     1.Make sure there's index on the split column.
     2.Split column type should be int/bingint/date/datetime, if numerical, split_column_precision should also be specified.
     3.Make sure your sql has a where condition(even where 1=1)
 task/batch split points：
-    SQL will be splitted into multiple tasks by split_column & split_interval
-    Every task will run <max_workers> batches serially, default batch size is 1000 records
+    SQL will be splitted into multiple tasks by split_column & split_interval(new sqls with between statement on split column)
+    Every task will run batches serially, default batch size is 1000(which means task sql will be suffixed by `limit 1000` and run multiple times until affected rows=0)
     There will be <max_workers> taskes run simultaneously.
     Run `grep Finished <log-name> | tail` to find out how many tasks finished.
 """

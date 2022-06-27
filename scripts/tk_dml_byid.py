@@ -5,11 +5,11 @@
 Usage:
     Following sql types supported：
         1.delete from <table> where <...>
-        2.update <tale> set <...> where <...>
+        2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
     _tidb_rowid will be used as the default split column.
-    If table was sharded(SHARD_ROW_ID_BITS or auto_random used) use tk_dml_bytime instead.
-    SQL will be splited into multiple batches by _tidb_rowid&batch_size, there will be <max_workers> batches run simultaneously
+    If table was sharded(SHARD_ROW_ID_BITS or auto_random used), use tk_dml_bytime instead.
+    SQL will be splited into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
