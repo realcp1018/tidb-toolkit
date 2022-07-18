@@ -12,6 +12,7 @@ import threading
 import argparse
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from utils.color import Color
 from utils.config import Config
 from utils.logger import FileLogger
 
