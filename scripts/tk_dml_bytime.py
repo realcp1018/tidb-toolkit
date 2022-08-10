@@ -154,7 +154,7 @@ class SQLOperator(object):
         3.exit when no where condition
         4.check split_column data type,should be int/bigint/date/datetime
             。if int/bigint, then start_time/end_time will be converted to unix timestamp
-            。if date/datetime, then do nothing
+            。if date/datetime/timestamp, then do nothing
             。if others, exit with error
         5.if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)
         """
@@ -186,7 +186,7 @@ class SQLOperator(object):
                         10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
                         10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
-        elif self.table.split_column_datatype in ("date", "datetime"):
+        elif self.table.split_column_datatype in ("date", "datetime", "timestamp"):
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S") if self.start_time else \
                 self.table.split_column_min
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S") if self.end_time else \
