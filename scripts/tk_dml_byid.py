@@ -180,7 +180,6 @@ class SQLOperator(object):
         thread_count = (self.end_rowid - self.start_rowid) // self.batch_size + 1
         logger.info(f"Max Thread Count: {thread_count}, Rowid Range [{self.start_rowid},{self.end_rowid}]")
         if not self.execute:
-            # 当不实际执行SQL只打印时，只跑1个batch输出示例SQL即可:
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(self.__run_batch,
                             self.start_rowid,
@@ -188,7 +187,7 @@ class SQLOperator(object):
                             1,
                             thread_count)
         else:
-            i = 0  # 每1000个线程释放一次concurrent.futures对象，因为累计futures对象过多后会导致内存溢出
+            i = 0  # release concurrent.futures every 1000 threads
             while i < thread_count:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
                     for j in range(i, i + 1000):
@@ -201,7 +200,6 @@ class SQLOperator(object):
 
     def __run_batch(self, start: int, stop: int, batch_id, max_batch_id):
         try:
-            # pymysql不支持prepare statement，所以我们选择每个thread自己拼sql
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
             rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.table.name, self.table.rowid,
