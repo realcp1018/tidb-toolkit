@@ -170,7 +170,7 @@ class SQLOperator(object):
         for token in sql_tokens:
             if isinstance(token, sqlparse.sql.Identifier) \
                     and (token.value.split(" ")[0].lower() == self.table.name.lower()):
-                self.concat_table_name = token.get_alias() if token.get_alias() else self.concat_table_name
+                self.concat_table_name = token.get_alias() if token.get_alias() else self.table.name
                 break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
