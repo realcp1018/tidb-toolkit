@@ -137,6 +137,7 @@ class SQLOperator(object):
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
         self.sql = sql.strip(";")
+        self.concat_table_name = None
         self.split_interval = int(split_interval) if split_interval else 86400
         self.split_column_precision = split_column_precision
         self.start_time = start_time
@@ -169,6 +170,10 @@ class SQLOperator(object):
             raise Exception(f"Unsupported SQL type: {sql_type}!")
         # 3
         sql_tokens = parsed_sql.tokens
+        for token in sql_tokens:
+            if isinstance(token, sqlparse.sql.Identifier) and (token.value.split(" ")[0].lower() == self.table.name.lower()):
+                self.concat_table_name = token.get_alias() if token.get_alias() else self.concat_table_name
+                break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
             raise Exception("No where condition in SQL, exit...")
@@ -221,7 +226,7 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.table.split_column} >= {start} AND {self.table.split_column} < {stop} AND"
+                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= {start} AND {self.concat_table_name}.{self.table.split_column} < {stop} AND"
                         )
                         break
             else:
@@ -229,7 +234,7 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.table.split_column} >= '{start}' AND {self.table.split_column} < '{stop}' AND"
+                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= '{start}' AND {self.concat_table_name}.{self.table.split_column} < '{stop}' AND"
                         )
                         break
             sql_token_values = list(map(lambda token: token.value, sql_tokens))

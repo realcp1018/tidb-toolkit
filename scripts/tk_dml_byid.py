@@ -140,6 +140,7 @@ class SQLOperator(object):
                  max_workers=None, start_rowid=None, end_rowid=None, execute=None):
         self.table: Table = table
         self.sql = sql.strip(";")
+        self.concat_table_name = None
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.start_rowid = int(start_rowid) if start_rowid else self.table.rowid_min
@@ -166,6 +167,11 @@ class SQLOperator(object):
             raise Exception(f"Unsupported SQL type: {sql_type}!")
         # 3
         sql_tokens = parsed_sql.tokens
+        for token in sql_tokens:
+            if isinstance(token, sqlparse.sql.Identifier) \
+                    and (token.value.split(" ")[0].lower() == self.table.name.lower()):
+                self.concat_table_name = token.get_alias() if token.get_alias() else self.concat_table_name
+                break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
             raise Exception("No where condition in SQL(try where 1=1), exit...")
@@ -202,7 +208,7 @@ class SQLOperator(object):
         try:
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
-            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.table.name, self.table.rowid,
+            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.concat_table_name, self.table.rowid,
                                                                                   start, stop)
             for i in range(len(sql_tokens)):
                 if isinstance(sql_tokens[i], sqlparse.sql.Where):
