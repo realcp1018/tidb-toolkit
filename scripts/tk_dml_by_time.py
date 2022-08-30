@@ -181,12 +181,15 @@ class SQLOperator(object):
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
                 datetime.fromtimestamp(self.table.split_column_max)
-            except OSError as e:
+            except OSError as e:  # for windows
                 if e.args[0] == 22:
                     raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
                                     "split_column_precision(3 or 6, default 0)!")
                 else:
                     raise e
+            except ValueError as e:  # for linux
+                raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
+                                "split_column_precision(3 or 6, default 0)!")
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
                         10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
