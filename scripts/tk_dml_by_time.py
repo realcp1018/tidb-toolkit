@@ -140,7 +140,8 @@ class SavePoint(object):
     def get_int(self) -> int:
         try:
             with open(self.file_name) as f:
-                return int(f.read())
+                v = f.read()
+                return int(v) if v else 0
         except FileNotFoundError:
             return 0
 
