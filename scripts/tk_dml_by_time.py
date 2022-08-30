@@ -17,8 +17,6 @@ task/batch split points：
     Run `grep Finished <log-name> | tail` to find out how many tasks finished.
 """
 import argparse
-import os
-import signal
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from queue import Queue, Empty
@@ -133,38 +131,10 @@ class Table(object):
         log.info(f"Load Table Info of {self.db}.{self.name} Done.")
 
 
-class SavePoint(object):
-    def __init__(self, file_name=None):
-        self.file_name = file_name
-
-    def get_int(self) -> int:
-        try:
-            with open(self.file_name) as f:
-                v = f.read()
-                return int(v) if v else 0
-        except FileNotFoundError:
-            return 0
-
-    def get_str(self) -> str:
-        try:
-            with open(self.file_name) as f:
-                return f.read()
-        except FileNotFoundError:
-            return ""
-
-    def set(self, savepoint):
-        with open(self.file_name, "w+") as f:
-            old_savepoint = f.read()
-            if str(savepoint) > old_savepoint:
-                f.write(str(savepoint))
-            else:
-                pass
-
-
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, sql=None, table: Table = None, split_interval=None,
-                 split_column_precision=None, start_time=None, end_time=None, batch_size=None, max_workers=None,
-                 savepoint: SavePoint = None, execute=False):
+                 split_column_precision=None,
+                 start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
         self.sql = sql.strip(";")
         self.concat_table_name = None
@@ -174,7 +144,6 @@ class SQLOperator(object):
         self.end_time = end_time
         self.batch_size = batch_size
         self.max_workers = max_workers
-        self.savepoint = savepoint
         self.execute = execute
         self.connction_pool: MySQLConnectionPool = pool
 
@@ -189,7 +158,6 @@ class SQLOperator(object):
             。if date/datetime/timestamp, then do nothing
             。if others, exit with error
         5.if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)
-        6.set start_time to  max of [start_time, savepoint]
         """
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
@@ -209,7 +177,7 @@ class SQLOperator(object):
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
             raise Exception("No where condition in SQL, exit...")
-        # 4 & 5 & 6
+        # 4 & 5
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
                 datetime.fromtimestamp(self.table.split_column_max)
@@ -221,13 +189,11 @@ class SQLOperator(object):
                     raise e
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
                         10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
-            self.start_time = max(self.start_time, self.savepoint.get_int())
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
                         10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
         elif self.table.split_column_datatype in ("date", "datetime", "timestamp"):
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S") if self.start_time else \
                 self.table.split_column_min
-            self.start_time = max(self.start_time, self.savepoint.get_str())
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S") if self.end_time else \
                 self.table.split_column_max
             self.split_interval = timedelta(seconds=self.split_interval)
@@ -295,10 +261,8 @@ class SQLOperator(object):
                 if affected_rows == 0:
                     task_end = datetime.now()
                     log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
-                    self.savepoint.set(stop)
             except Exception as e:
                 log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
-                os.kill(os.getpid(), signal.SIGINT)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
@@ -330,7 +294,7 @@ if __name__ == '__main__':
     operator = SQLOperator(pool=pool, sql=conf.sql, table=table, split_interval=conf.split_interval,
                            split_column_precision=conf.split_column_precision,
                            start_time=conf.start_time, end_time=conf.end_time, batch_size=conf.batch_size,
-                           max_workers=conf.max_workers, execute=conf.execute, savepoint=SavePoint(conf.savepoint))
+                           max_workers=conf.max_workers, execute=conf.execute)
     operator.validate()
     operator.run()
 

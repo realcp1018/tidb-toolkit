@@ -22,14 +22,14 @@ override = false
 sql = ""
 ## true/false，execute or not(default: print the first batched sql and stop running, safe mode)
 execute = false
-## savepoint filename, default ${host}.savepoint
-savepoint = ""
 
 [dml.by_id]
 ## min _tidb_rowid when split sql, default min(_tidb_rowid)
 # start_rowid = 0
 ## max _tidb_rowid when split sql, default max(_tidb_rowid)
 # end_rowid = 0
+## savepoint filename, default ${host}.savepoint
+savepoint = 0
 
 [dml.by_time]
 ## required, table field used for splitting, should be int/bigint/data/datetime

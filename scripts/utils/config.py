@@ -41,7 +41,7 @@ class Config(object):
         self.override = config["flashback"].get("override", False)
         # dml config
         self.sql = config["dml"]["sql"]
-        self.savepoint = config["dml"].get("savepoint", None)
+        self.savepoint = config["dml"]["by_id"].get("savepoint", None)
         if not self.savepoint:
             self.savepoint = f"{self.host}.savepoint"
         self.execute = config["dml"].get("execute", False)
