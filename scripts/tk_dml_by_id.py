@@ -11,7 +11,9 @@ Usage:
     If table was sharded(SHARD_ROW_ID_BITS or auto_random used), use tk_dml_bytime instead.
     SQL will be splited into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously
 """
+import os
 import argparse
+import signal
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, Empty
@@ -135,9 +137,25 @@ class Table(object):
         logger.info(f"Load Table Info of {self.db}.{self.name} Done.")
 
 
+class SavePoint(object):
+    def __init__(self, file_name=None):
+        self.file_name = file_name
+
+    def get(self) -> int:
+        try:
+            with open(self.file_name) as f:
+                return int(f.read())
+        except FileNotFoundError as e:
+            return 0
+
+    def set(self, savepoint):
+        with open(self.file_name, "w") as f:
+            f.write(savepoint)
+
+
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
-                 max_workers=None, start_rowid=None, end_rowid=None, execute=None):
+                 max_workers=None, start_rowid=None, end_rowid=None, savepoint: SavePoint = None, execute=None):
         self.table: Table = table
         self.sql = sql.strip(";")
         self.concat_table_name = None
@@ -145,6 +163,7 @@ class SQLOperator(object):
         self.max_workers = max_workers
         self.start_rowid = int(start_rowid) if start_rowid else self.table.rowid_min
         self.end_rowid = int(end_rowid) if end_rowid else self.table.rowid_max
+        self.savepoint = savepoint
         self.execute = execute
         self.connction_pool: MySQLConnectionPool = pool
 
@@ -153,8 +172,9 @@ class SQLOperator(object):
         """
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
-        3.exit when no where condition
+        3.exit when no where conditions in sql
         4.exit if table was sharded(SHARD_ROW_ID_BITS or auto_random)
+        5.set start_rowid to max of [start_rowid, savepoint]
         """
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
@@ -180,6 +200,9 @@ class SQLOperator(object):
             raise Exception(f"Table {self.table.name} was set SHARD_ROW_ID_BITS or AUTO_RANDOM! exit...")
 
         logger.info(f"Rowid [{self.table.rowid}] will be used for batching.")
+        # 5
+        self.start_rowid = max(self.savepoint.get(), self.start_rowid)
+        # Done
         logger.info("Validating SQL Done...")
 
     def run(self):
@@ -203,12 +226,14 @@ class SQLOperator(object):
                                     j + 1,
                                     thread_count)
                 i += 1000
+                self.savepoint.set(self.start_rowid + (i * self.batch_size))
 
     def __run_batch(self, start: int, stop: int, batch_id, max_batch_id):
         try:
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
-            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.concat_table_name, self.table.rowid,
+            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.concat_table_name,
+                                                                                  self.table.rowid,
                                                                                   start, stop)
             for i in range(len(sql_tokens)):
                 if isinstance(sql_tokens[i], sqlparse.sql.Where):
@@ -231,7 +256,7 @@ class SQLOperator(object):
                             f"{end_time - start_time}).\nSQL: {batch_sql}")
             except Exception as e:
                 logger.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
-                raise
+                os.kill(os.getpid(), signal.SIGINT)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
@@ -261,7 +286,8 @@ if __name__ == '__main__':
 
     # start sql operator
     operator = SQLOperator(pool=pool, table=table, sql=conf.sql, batch_size=conf.batch_size, execute=conf.execute,
-                           max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid)
+                           max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
+                           savepoint=SavePoint(conf.savepoint))
     operator.validate()
     operator.run()
 

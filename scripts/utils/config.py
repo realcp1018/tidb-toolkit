@@ -43,7 +43,7 @@ class Config(object):
         self.sql = config["dml"]["sql"]
         self.savepoint = config["dml"].get("savepoint", None)
         if not self.savepoint:
-            self.savepoint = f"{self.host}.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}.savepoint"
+            self.savepoint = f"{self.host}.savepoint"
         self.execute = config["dml"].get("execute", False)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)

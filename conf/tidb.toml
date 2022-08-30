@@ -22,6 +22,8 @@ override = false
 sql = ""
 ## true/false，execute or not(default: print the first batched sql and stop running, safe mode)
 execute = false
+## savepoint filename, default ${host}.savepoint
+savepoint = ""
 
 [dml.by_id]
 ## min _tidb_rowid when split sql, default min(_tidb_rowid)
