@@ -155,7 +155,7 @@ class SavePoint(object):
         with open(self.file_name, "w+") as f:
             old_savepoint = f.read()
             if str(savepoint) > old_savepoint:
-                f.write(savepoint)
+                f.write(str(savepoint))
             else:
                 pass
 

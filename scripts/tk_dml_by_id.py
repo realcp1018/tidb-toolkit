@@ -150,7 +150,7 @@ class SavePoint(object):
 
     def set(self, savepoint):
         with open(self.file_name, "w") as f:
-            f.write(savepoint)
+            f.write(str(savepoint))
 
 
 class SQLOperator(object):
