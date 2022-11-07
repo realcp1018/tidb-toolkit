@@ -139,7 +139,7 @@ class SQLOperator(object):
         self.sql = sql.strip(";")
         self.concat_table_name = None
         self.split_interval = int(split_interval) if split_interval else 86400
-        self.split_column_precision = split_column_precision
+        self.split_column_precision = int(split_column_precision) if split_column_precision else 0
         self.start_time = start_time
         self.end_time = end_time
         self.batch_size = batch_size
@@ -180,7 +180,7 @@ class SQLOperator(object):
         # 4 & 5
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
-                datetime.fromtimestamp(self.table.split_column_max)
+                datetime.fromtimestamp(self.table.split_column_max/(10**self.split_column_precision))
             except OSError as e:  # for windows
                 if e.args[0] == 22:
                     raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
