@@ -77,7 +77,12 @@ class MySQLConnectionPool(object):
         logger.info("Closing MySQL Connection Pool Finished...")
 
     def get(self):
-        return self.pool.get()
+        conn = self.pool.get()
+        try:
+            conn.ping()
+        except Exception as e:
+            logger.error(e)
+        return conn
 
     def put(self, conn: pymysql.Connection):
         self.pool.put(conn)
@@ -246,8 +251,8 @@ class SQLOperator(object):
             logger.error(f"Batch {batch_id} failed with exeception {e}, exit... Exception:\n {format_exc()}")
             raise
         if self.execute:
-            conn = self.connction_pool.get()
             try:
+                conn = self.connction_pool.get()
                 start_time = datetime.now()
                 with conn.cursor() as c:
                     affected_rows = c.execute(batch_sql)

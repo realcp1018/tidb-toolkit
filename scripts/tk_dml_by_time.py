@@ -16,6 +16,8 @@ task/batch split points：
     There will be <max_workers> taskes run simultaneously.
     Run `grep Finished <log-name> | tail` to find out how many tasks finished.
 """
+import os
+import signal
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -80,7 +82,12 @@ class MySQLConnectionPool(object):
         log.info("Closing MySQL Connection Pool Finished...")
 
     def get(self):
-        return self.pool.get()
+        conn = self.pool.get()
+        try:
+            conn.ping()
+        except Exception as e:
+            logger.error(e)
+        return conn
 
     def put(self, conn: pymysql.Connection):
         self.pool.put(conn)
@@ -249,8 +256,8 @@ class SQLOperator(object):
             log.error(f"Task SQL Generate Failed On [{start},{stop}) :{e}, Exception:\n{format_exc()}")
             raise e
         if self.execute:
-            conn = self.connction_pool.get()
             try:
+                conn = self.connction_pool.get()
                 affected_rows = 1
                 task_start = datetime.now()
                 while affected_rows > 0:
@@ -266,6 +273,7 @@ class SQLOperator(object):
                     log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
             except Exception as e:
                 log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
+                os.kill(os.getpid(), signal.SIGINT)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
