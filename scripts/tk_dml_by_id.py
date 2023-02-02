@@ -51,7 +51,7 @@ class MySQLConnectionPool(object):
         self.pool: Queue = Queue(maxsize=self.pool_size)
 
     def init(self):
-        logger.info("Initializing MySQL Connection Pool...")
+        log.info("Initializing MySQL Connection Pool...")
         for i in range(self.pool_size):
             try:
                 conn = pymysql.connect(host=self.host, port=self.port, user=self.user, password=self.password,
@@ -59,29 +59,29 @@ class MySQLConnectionPool(object):
                 conn.autocommit(True)
                 self.pool.put(conn)
             except Exception as e:
-                logger.fatal("Create mysql connections failed, please check database connectivity! Exit!\n%s", e)
+                log.fatal("Create mysql connections failed, please check database connectivity! Exit!\n%s", e)
                 raise e
-        logger.info("Initializing MySQL Connection Pool Finished...")
+        log.info("Initializing MySQL Connection Pool Finished...")
 
     def close(self):
-        logger.info("Closing MySQL Connection Pool...")
+        log.info("Closing MySQL Connection Pool...")
         for i in range(self.pool_size):
             try:
                 conn: pymysql.Connection = self.pool.get(timeout=5)
                 conn.close()
             except Empty:
-                logger.info("Connection Pool is empty, exit...")
+                log.info("Connection Pool is empty, exit...")
                 return
             except Exception as e:
-                logger.info(f"Connection Pool close with Exception: {e}")
-        logger.info("Closing MySQL Connection Pool Finished...")
+                log.info(f"Connection Pool close with Exception: {e}")
+        log.info("Closing MySQL Connection Pool Finished...")
 
     def get(self):
         conn = self.pool.get()
         try:
             conn.ping()
         except Exception as e:
-            logger.error(e)
+            log.error(e)
         return conn
 
     def put(self, conn: pymysql.Connection):
@@ -91,7 +91,7 @@ class MySQLConnectionPool(object):
         # start a monitor to report the pool size
         def report_size():
             while True:
-                logger.info(f"ConnectionPool Monitor: Size {self.pool.qsize()}")
+                log.info(f"ConnectionPool Monitor: Size {self.pool.qsize()}")
                 sleep(10)
 
         thd = Thread(target=report_size, daemon=True)
@@ -110,7 +110,7 @@ class Table(object):
         self.is_rowid_sharded = False
 
     def load(self):
-        logger.info(f"Loading Table Info of {self.db}.{self.name} ...")
+        log.info(f"Loading Table Info of {self.db}.{self.name} ...")
         with self.conn.cursor() as c:
             sql = f"select COLUMN_NAME,DATA_TYPE from information_schema.COLUMNS where table_schema='{self.db}' " \
                   f"and table_name='{self.name}' and COLUMN_KEY='PRI';"
@@ -139,7 +139,7 @@ class Table(object):
             sql = f"select min({self.rowid}),max({self.rowid}) from {self.db}.{self.name};"
             c.execute(sql)
             self.rowid_min, self.rowid_max = c.fetchone()
-        logger.info(f"Load Table Info of {self.db}.{self.name} Done.")
+        log.info(f"Load Table Info of {self.db}.{self.name} Done.")
 
 
 class SavePoint(object):
@@ -174,7 +174,7 @@ class SQLOperator(object):
         self.connction_pool: MySQLConnectionPool = pool
 
     def validate(self):
-        logger.info("Validating SQL Start...")
+        log.info("Validating SQL Start...")
         """
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
@@ -185,7 +185,7 @@ class SQLOperator(object):
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
                                    keyword_case="upper")
-        logger.info(f"SQL will be batched: \n{self.sql}")
+        log.info(f"SQL will be batched: \n{self.sql}")
         # 2
         parsed_sql = sqlparse.parse(self.sql)[0]
         sql_type = parsed_sql.get_type()
@@ -205,15 +205,15 @@ class SQLOperator(object):
         if self.table.is_rowid_sharded:
             raise Exception(f"Table {self.table.name} was set SHARD_ROW_ID_BITS or AUTO_RANDOM! exit...")
 
-        logger.info(f"Rowid [{self.table.rowid}] will be used for batching.")
+        log.info(f"Rowid [{self.table.rowid}] will be used for batching.")
         # 5
         self.start_rowid = max(self.savepoint.get(), self.start_rowid)
         # Done
-        logger.info("Validating SQL Done...")
+        log.info("Validating SQL Done...")
 
     def run(self):
         thread_count = (self.end_rowid - self.start_rowid) // self.batch_size + 1
-        logger.info(f"Max Thread Count: {thread_count}, Rowid Range [{self.start_rowid},{self.end_rowid}]")
+        log.info(f"Max Thread Count: {thread_count}, Rowid Range [{self.start_rowid},{self.end_rowid}]")
         if not self.execute:
             with ThreadPoolExecutor(max_workers=1) as pool:
                 pool.submit(self.__run_batch,
@@ -238,17 +238,17 @@ class SQLOperator(object):
         try:
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
-            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND".format(self.concat_table_name,
-                                                                                  self.table.rowid,
-                                                                                  start, stop)
+            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND (".format(self.concat_table_name,
+                                                                                    self.table.rowid,
+                                                                                    start, stop)
             for i in range(len(sql_tokens)):
                 if isinstance(sql_tokens[i], sqlparse.sql.Where):
                     sql_tokens[i].value = sql_tokens[i].value.replace("WHERE", rowid_condition)
                     break
             sql_token_values = list(map(lambda token: token.value, sql_tokens))
-            batch_sql = ' '.join(sql_token_values)
+            batch_sql = ' '.join(sql_token_values) + ")"
         except Exception as e:
-            logger.error(f"Batch {batch_id} failed with exeception {e}, exit... Exception:\n {format_exc()}")
+            log.error(f"Batch {batch_id} failed with exeception {e}, exit... Exception:\n {format_exc()}")
             raise
         if self.execute:
             try:
@@ -258,16 +258,17 @@ class SQLOperator(object):
                     affected_rows = c.execute(batch_sql)
                 conn.commit()
                 end_time = datetime.now()
-                logger.info(f"Batch {batch_id} of {max_batch_id} OK, {affected_rows} Rows Affected ("
-                            f"{end_time - start_time}).\nSQL: {batch_sql}")
+                log.info(f"Batch {batch_id} of {max_batch_id} OK, {affected_rows} Rows Affected ("
+                         f"{end_time - start_time}).\nSQL: {batch_sql}")
             except Exception as e:
-                logger.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
+                log.error(f"SQL: {batch_sql}")
+                log.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
                 os.kill(os.getpid(), signal.SIGINT)
             finally:
                 if conn:
                     self.connction_pool.put(conn)
         else:
-            logger.info(f"Batch {batch_id} of {max_batch_id} Dry Run:\nSQL: {batch_sql}")
+            log.info(f"Batch {batch_id} of {max_batch_id} Dry Run:\nSQL: {batch_sql}")
 
 
 if __name__ == '__main__':
@@ -275,7 +276,7 @@ if __name__ == '__main__':
     config_file, log_file = args.config, args.log
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    logger = FileLogger(filename=conf.log_file)
+    log = FileLogger(filename=conf.log_file)
     print(f"See logs in {conf.log_file} ...")
 
     # create connection pool

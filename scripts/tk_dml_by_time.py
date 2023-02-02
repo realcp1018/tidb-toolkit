@@ -238,7 +238,7 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= {start} AND {self.concat_table_name}.{self.table.split_column} < {stop} AND"
+                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= {start} AND {self.concat_table_name}.{self.table.split_column} < {stop} AND ("
                         )
                         break
             else:
@@ -246,11 +246,11 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= '{start}' AND {self.concat_table_name}.{self.table.split_column} < '{stop}' AND"
+                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= '{start}' AND {self.concat_table_name}.{self.table.split_column} < '{stop}' AND ("
                         )
                         break
             sql_token_values = list(map(lambda token: token.value, sql_tokens))
-            task_sql = ' '.join(sql_token_values)
+            task_sql = ' '.join(sql_token_values) + ")"
             batch_sql = task_sql + f" limit {self.batch_size};"
         except Exception as e:
             log.error(f"Task SQL Generate Failed On [{start},{stop}) :{e}, Exception:\n{format_exc()}")
@@ -272,6 +272,7 @@ class SQLOperator(object):
                     task_end = datetime.now()
                     log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
             except Exception as e:
+                log.error(f"SQL: {batch_sql}")
                 log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
                 os.kill(os.getpid(), signal.SIGINT)
             finally:
