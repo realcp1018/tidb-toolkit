@@ -256,28 +256,32 @@ class SQLOperator(object):
             log.error(f"Task SQL Generate Failed On [{start},{stop}) :{e}, Exception:\n{format_exc()}")
             raise e
         if self.execute:
-            try:
-                conn = self.connction_pool.get()
-                affected_rows = 1
-                task_start = datetime.now()
-                while affected_rows > 0:
-                    batch_start_time = datetime.now()
-                    with conn.cursor() as c:
-                        affected_rows = c.execute(batch_sql)
-                    conn.commit()
-                    batch_end_time = datetime.now()
-                    log.info(f"Task Batch On [{start},{stop}) OK, {affected_rows} Rows Affected"
-                             f"({batch_end_time - batch_start_time}).\nSQL: {batch_sql}")
-                if affected_rows == 0:
-                    task_end = datetime.now()
-                    log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
-            except Exception as e:
-                log.error(f"SQL: {batch_sql}")
-                log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
-                os.kill(os.getpid(), signal.SIGINT)
-            finally:
-                if conn:
+            retry = 0
+            while retry < 3:
+                try:
+                    conn = self.connction_pool.get()
+                    affected_rows = 1
+                    task_start = datetime.now()
+                    while affected_rows > 0:
+                        batch_start_time = datetime.now()
+                        with conn.cursor() as c:
+                            affected_rows = c.execute(batch_sql)
+                        conn.commit()
+                        batch_end_time = datetime.now()
+                        log.info(f"Task Batch On [{start},{stop}) OK, {affected_rows} Rows Affected"
+                                 f"({batch_end_time - batch_start_time}).\nSQL: {batch_sql}")
+                    if affected_rows == 0:
+                        task_end = datetime.now()
+                        log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
                     self.connction_pool.put(conn)
+                    break
+                except Exception as e:
+                    log.error(f"SQL Retry {retry} Failed: {batch_sql}")
+                    log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
+                    self.connction_pool.put(conn)
+            if retry == 3:
+                log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
+                os.kill(os.getpid(), signal.SIGINT)
         else:
             log.info(f"Task On [{start},{stop}) Dry Run:\nSQL: {batch_sql}")
 

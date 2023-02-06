@@ -251,22 +251,27 @@ class SQLOperator(object):
             log.error(f"Batch {batch_id} failed with exeception {e}, exit... Exception:\n {format_exc()}")
             raise
         if self.execute:
-            try:
-                conn = self.connction_pool.get()
-                start_time = datetime.now()
-                with conn.cursor() as c:
-                    affected_rows = c.execute(batch_sql)
-                conn.commit()
-                end_time = datetime.now()
-                log.info(f"Batch {batch_id} of {max_batch_id} OK, {affected_rows} Rows Affected ("
-                         f"{end_time - start_time}).\nSQL: {batch_sql}")
-            except Exception as e:
-                log.error(f"SQL: {batch_sql}")
-                log.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
-                os.kill(os.getpid(), signal.SIGINT)
-            finally:
-                if conn:
+            retry = 0
+            while retry < 3:
+                try:
+                    conn = self.connction_pool.get()
+                    start_time = datetime.now()
+                    with conn.cursor() as c:
+                        affected_rows = c.execute(batch_sql)
+                    conn.commit()
+                    end_time = datetime.now()
+                    log.info(f"Batch {batch_id} of {max_batch_id} OK, {affected_rows} Rows Affected ("
+                             f"{end_time - start_time}).\nSQL: {batch_sql}")
                     self.connction_pool.put(conn)
+                    break
+                except Exception as e:
+                    retry += 1
+                    log.error(f"SQL Retry {retry} Failed: {batch_sql}")
+                    log.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
+                    self.connction_pool.put(conn)
+            if retry == 3:
+                log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
+                os.kill(os.getpid(), signal.SIGINT)
         else:
             log.info(f"Batch {batch_id} of {max_batch_id} Dry Run:\nSQL: {batch_sql}")
 
