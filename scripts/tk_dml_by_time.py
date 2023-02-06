@@ -86,7 +86,7 @@ class MySQLConnectionPool(object):
         try:
             conn.ping()
         except Exception as e:
-            logger.error(e)
+            log.error(e)
         return conn
 
     def put(self, conn: pymysql.Connection):
@@ -194,7 +194,7 @@ class SQLOperator(object):
                                     "split_column_precision(3 or 6, default 0)!")
                 else:
                     raise e
-            except ValueError as e:  # for linux
+            except ValueError:  # for linux
                 raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
                                 "split_column_precision(3 or 6, default 0)!")
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
