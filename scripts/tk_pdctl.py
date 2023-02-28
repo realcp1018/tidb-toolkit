@@ -384,7 +384,7 @@ class Store(object):
 
     @property
     def space_used_ratio(self) -> str:
-        return f'{1 - (ByteSize(self.available).get() / ByteSize(self.capacity).get()):.2}'
+        return f'{1 - (ByteSize(self.available).get() / ByteSize(self.capacity).get()) :.2%}'
 
     @classmethod
     def from_api_all(cls, pd_addr, all_state=True):
