@@ -1,5 +1,5 @@
 [basic]
-## all required
+## all tools required
 host = "127.0.0.1"
 port = 4000
 user = "root"

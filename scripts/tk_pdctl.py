@@ -7,6 +7,7 @@ get store/region info from pd http api and pretty print result
 import argparse
 import json
 import requests
+from utils.bytesize import ByteSize
 from utils.logger import StreamLogger
 from utils.formatter import Formatter
 from utils.color import Color
@@ -15,14 +16,20 @@ from pprint import pprint
 from typing import List
 
 # Const
-ALL_SUPPORT_ACTIONS = ["showStore", "showStores", "showRegion", "showRegions", "showStoreRegions",
-                       "showRegions1Peer", "showRegions2Peer", "showRegions3Peer", "showRegions4Peer",
-                       "showRegionsNoLeader", "removeRegionPeer", "removeStorePeers"]
+ALL_SUPPORT_ACTIONS = ["showStore", "showStores",
+                       "showRegion", "showRegions",
+                       "showStoreRegions",
+                       "showRegions1Peer",
+                       "showRegions2Peer",
+                       "showRegions3Peer",
+                       "showRegions4Peer",
+                       "showRegionsNoLeader",
+                       "removeRegionPeer",
+                       "removeStorePeers"]
+# TODO:
+#  safeRemoveRegionPeer, safeRemoveStorePeers: remove peer/peers when len(Region peers on Up stores after removed)>=2
 
-# TODO: 2 new actions -> safeRemoveRegionPeer, safeRemoveStorePeers: remove peer/peers when len(Region peers on Up
-#  stores after removed)>=2
-
-# Logger and Color
+# set Logger and Color
 logger = StreamLogger()
 color = Color()
 
@@ -40,13 +47,14 @@ def argParse():
                         help="region id")
     parser.add_argument("-l", metavar="<limit>", dest="limit", type=int, default=5,
                         help="region show limit, default 5")
-    parser.add_argument("-t", metavar="<interval>", dest="interval", type=int,
-                        default=3, help="operator create interval(seconds), default 3")
+    parser.add_argument("-t", metavar="<interval>", dest="interval", type=int, default=3,
+                        help="operator create interval(seconds), default 3")
     return parser.parse_args()
 
 
 class OptionHandler(object):
-    def __init__(self, url: str, storeID: int, regionID: int, option: str, limit: int, interval: int):
+    def __init__(self, url: str, storeID: int = None, regionID: int = None, option: str = None, limit: int = None,
+                 interval: int = None):
         self.__url = url
         self.__storeID = storeID
         self.__regionID = regionID
@@ -55,7 +63,7 @@ class OptionHandler(object):
         self.__interval = interval
         self.__store_formatter = Formatter(
             column_definition={
-                "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "StartTime": 30,
+                "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "SpaceUsed": 15, "StartTime": 30,
                 "Labels": 64
             })
         self.__region_formatter = Formatter(
@@ -69,37 +77,36 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Error: Store ID should be specified!")
             exit(1)
-        replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
-        label_rules = replication_config.get('location-labels')
-        label_force_match = replication_config.get('strictly-match-label')
-        color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
+        pdconfig = PDConfig.from_api(self.__url)
         stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
+        pdconfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in stores:
             if store.store_id == self.__storeID:
-                self.__store_formatter.print_line((store.address, store.store_id, store.state_name,
+                self.__store_formatter.print_record((store.address, store.store_id, store.state_name,
                                                    "%s/%s" % (store.leader_count, store.region_count),
                                                    "%s/%s" % (store.leader_weight, store.region_weight),
-                                                   store.start_ts,
+                                                   store.space_used_ratio, store.start_ts,
                                                    [{l.get('key'): l.get('value')} for l in store.labels])
                                                   )
+                pdconfig.print_warn_configs()
                 return
         print("Error: Store ID %d not exist!" % self.__storeID)
         exit(1)
 
     # for all stores
     def showStores(self):
-        replication_config = requests.get("http://%s/pd/api/v1/config" % self.__url).json().get('replication')
-        label_rules = replication_config.get('location-labels')
-        label_force_match = replication_config.get('strictly-match-label')
-        color.print_red("# Location-Label Rules: {0} (force: {1})".format(label_rules, label_force_match))
+        pdconfig = PDConfig.from_api(self.__url)
         stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
+        pdconfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
-            self.__store_formatter.print_line((store.address, store.store_id, store.state_name,
+            self.__store_formatter.print_record((store.address, store.store_id, store.state_name,
                                                "%s/%s" % (store.leader_count, store.region_count),
                                                "%s/%s" % (store.leader_weight, store.region_weight),
-                                               store.start_ts,  [{l.get('key'): l.get('value')} for l in store.labels]))
+                                                 store.space_used_ratio,
+                                                 store.start_ts, [{l.get('key'): l.get('value')} for l in store.labels]))
+        pdconfig.print_warn_configs()
 
     # for single region
     def showRegion(self):
@@ -119,7 +126,7 @@ class OptionHandler(object):
             PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
         else:
             PendingPeersStoreID = []
-        self.__region_formatter.print_line(((region.region_id, storeList, leader,
+        self.__region_formatter.print_record(((region.region_id, storeList, leader,
                                              leaderAddr, downPeersStoreID,
                                              PendingPeersStoreID, region.approximate_size,
                                              region.approximate_keys)))
@@ -140,7 +147,7 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            self.__region_formatter.print_line((region.region_id, storeList, leader,
+            self.__region_formatter.print_record((region.region_id, storeList, leader,
                                                 leaderAddr, downPeersStoreID,
                                                 PendingPeersStoreID,
                                                 region.approximate_size,
@@ -148,7 +155,7 @@ class OptionHandler(object):
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
-        color.print_red("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
+        color.print_green("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j < self.__limit:
@@ -166,7 +173,7 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                self.__region_formatter.print_line((region.region_id, storeList, leader,
+                self.__region_formatter.print_record((region.region_id, storeList, leader,
                                                     leaderAddr, downPeersStoreID,
                                                     PendingPeersStoreID,
                                                     region.approximate_size,
@@ -176,7 +183,7 @@ class OptionHandler(object):
 
     def showRegionsNoLeader(self):
         regions = Region.from_api_all(pd_addr=self.__url)
-        color.print_red("# RegionsNoLeader(limit {0}):".format(self.__limit))
+        color.print_green("# RegionsNoLeader(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j < self.__limit:
@@ -194,7 +201,7 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                self.__region_formatter.print_line((region.region_id, storeList, leader,
+                self.__region_formatter.print_record((region.region_id, storeList, leader,
                                                     leaderAddr, downPeersStoreID,
                                                     PendingPeersStoreID,
                                                     region.approximate_size,
@@ -208,7 +215,7 @@ class OptionHandler(object):
             print("Error: Store ID should be specified!")
             exit(1)
         regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
-        color.print_red("# Top {0} Regions(limit {0}):".format(self.__limit))
+        color.print_green("# Top {0} Regions(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
@@ -222,7 +229,7 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            self.__region_formatter.print_line((region.region_id, storeList, leader,
+            self.__region_formatter.print_record((region.region_id, storeList, leader,
                                                 leaderAddr, downPeersStoreID,
                                                 PendingPeersStoreID,
                                                 region.approximate_size,
@@ -292,6 +299,57 @@ class OptionHandler(object):
             pass
 
 
+class PDConfig(object):
+    def __init__(self, location_labels=None, strictly_match_label=None, high_space_ratio=None, low_space_ratio=None,
+                 label_property=None, evict_leader_scheduler: bool=False):
+        # replication configs
+        self.location_labels = location_labels
+        self.strictly_match_label = strictly_match_label
+        # schedule configs
+        self.high_space_ratio = high_space_ratio
+        self.low_space_ratio = low_space_ratio
+        self.evict_leader_scheduler: bool = evict_leader_scheduler
+        # other configs
+        self.label_property = label_property
+
+    @classmethod
+    def from_api(cls, pd_addr):
+        resp = requests.get("http://%s/pd/api/v1/config" % pd_addr).json()
+        config_proto = PDConfig()
+        cls_kwargs = {}
+        for k, v in resp["replication"].items():
+            if k.replace("-", "_") in config_proto.__dir__():
+                cls_kwargs[k.replace("-", "_")] = v
+        for k, v in resp["schedule"].items():
+            if k.replace("-", "_") in config_proto.__dir__():
+                cls_kwargs[k.replace("-", "_")] = v
+        for scheduler in resp["schedule"]["schedulers-v2"]:
+            if scheduler["type"].__contains__("evict-leader") and scheduler["disable"] == False:
+                cls_kwargs["evict_leader_scheduler"] = True
+        for k, v in resp.items():
+            if k.replace("-", "_") in config_proto.__dir__():
+                cls_kwargs[k.replace("-", "_")] = v
+        return cls(**cls_kwargs)
+
+    def print_core_configs(self):
+        color.print_green("# Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels,self.strictly_match_label))
+        color.print_green("# Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
+
+    def print_warn_configs(self):
+        # set label-property or evict-leader-scheduler will cause imbalanced data between zone/rack/host
+        # return warning msg when those are set
+        msg = []
+        if self.label_property:
+            msg.append("label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
+        if self.evict_leader_scheduler:
+            msg.append("evict-leader-scheduler was set! Please reset it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
+        if msg:
+            color.print_red("WARN:")
+        for warn in msg:
+            color.print_red(warn)
+        return
+
+
 class Store(object):
     def __init__(self, store_id=None, address=None, labels=None, last_heartbeat=None, last_heartbeat_ts=None,
                  version=None, status_address=None, git_hash=None, deploy_path=None, state_name=None,
@@ -312,7 +370,7 @@ class Store(object):
         self.start_ts = start_ts
         self.capacity = capacity
         self.available = available
-        self.used_size = used_size
+        self.used_size = used_size  # may not exist in v3
         self.leader_count = leader_count
         self.leader_size = leader_size
         self.leader_score = leader_score
@@ -323,6 +381,10 @@ class Store(object):
         self.region_weight = region_weight
         self.uptime = uptime
         self.slow_score = slow_score
+
+    @property
+    def space_used_ratio(self) -> str:
+        return f'{1 - round(ByteSize(self.available).get() / ByteSize(self.capacity).get(), 2)}'
 
     @classmethod
     def from_api_all(cls, pd_addr, all_state=True):
@@ -339,17 +401,15 @@ class Store(object):
         for store in resp.json()["stores"]:
             cls_kwargs = {}
             for k, v in store["status"].items():
-                if k not in store_proto.__dir__():
-                    continue
-                else:
+                if k in store_proto.__dir__():
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k not in store_proto.__dir__():
-                    continue
-                else:
+                elif k in store_proto.__dir__():
                     cls_kwargs[k] = v
+                else:
+                    continue
             all_stores.append(cls(**cls_kwargs))
         return all_stores
 
@@ -369,17 +429,15 @@ class Store(object):
             if store["store"]["address"].split(":")[0] == ip:
                 cls_kwargs = {}
                 for k, v in store["status"].items():
-                    if k not in store_proto.__dir__():
-                        continue
-                    else:
+                    if k in store_proto.__dir__():
                         cls_kwargs[k] = v
                 for k, v in store["store"].items():
                     if k == "id":
                         cls_kwargs["store_id"] = v
-                    elif k not in store_proto.__dir__():
-                        continue
-                    else:
+                    elif k in store_proto.__dir__():
                         cls_kwargs[k] = v
+                    else:
+                        continue
                 all_stores.append(cls(**cls_kwargs))
         return all_stores
 
@@ -395,17 +453,15 @@ class Store(object):
         cls_kwargs = {}
         try:
             for k, v in store["status"].items():
-                if k not in store_proto.__dir__():
-                    continue
-                else:
+                if k in store_proto.__dir__():
                     cls_kwargs[k] = v
             for k, v in store["store"].items():
                 if k == "id":
                     cls_kwargs["store_id"] = v
-                elif k not in store_proto.__dir__():
-                    continue
-                else:
+                elif k in store_proto.__dir__():
                     cls_kwargs[k] = v
+                else:
+                    continue
         except Exception:
             pprint(store)
             raise
@@ -445,9 +501,7 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
-                elif k not in region_proto.__dir__():
-                    continue
-                else:
+                elif k in region_proto.__dir__():
                     cls_kwargs[k] = v
             all_regions.append(cls(**cls_kwargs))
         return all_regions
@@ -467,10 +521,10 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
-                elif k not in region_proto.__dir__():
-                    continue
-                else:
+                elif k in region_proto.__dir__():
                     cls_kwargs[k] = v
+                else:
+                    continue
             all_regions.append(cls(**cls_kwargs))
         return all_regions
 
@@ -490,10 +544,10 @@ class Region(object):
         for k, v in region.items():
             if k == "id":
                 cls_kwargs["region_id"] = v
-            elif k not in region_proto.__dir__():
-                continue
-            else:
+            elif k in region_proto.__dir__():
                 cls_kwargs[k] = v
+            else:
+                continue
         return cls(**cls_kwargs)
 
     @classmethod
@@ -510,10 +564,10 @@ class Region(object):
             for k, v in region.items():
                 if k == "id":
                     cls_kwargs["region_id"] = v
-                elif k not in region_proto.__dir__():
-                    continue
-                else:
+                elif k in region_proto.__dir__():
                     cls_kwargs[k] = v
+                else:
+                    continue
             all_regions.append(cls(**cls_kwargs))
         return all_regions
 
@@ -539,4 +593,3 @@ if __name__ == '__main__':
     args = argParse()
     optionHandler = OptionHandler(args.url, args.storeID, args.regionID, args.option, args.limit, args.interval)
     optionHandler.run()
-

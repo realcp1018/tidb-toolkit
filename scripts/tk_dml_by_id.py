@@ -26,7 +26,7 @@ import sqlparse
 import sqlparse.tokens as T
 
 from utils.logger import FileLogger
-from utils.config import Config
+from conf.config import Config
 
 # Global Constants
 SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]

@@ -41,13 +41,13 @@ class Config(object):
         self.override = config["flashback"].get("override", False)
         # dml config
         self.sql = config["dml"]["sql"]
-        self.savepoint = config["dml"]["by_id"].get("savepoint", None)
-        if not self.savepoint:
-            self.savepoint = f"{self.host}.savepoint"
         self.execute = config["dml"].get("execute", False)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
         self.end_rowid = config["dml"]["by_id"].get("end_rowid", None)
+        self.savepoint = config["dml"]["by_id"].get("savepoint", None)
+        if not self.savepoint:
+            self.savepoint = f"{self.host}.savepoint"
         # by time
         self.start_time = config["dml"]["by_time"].get("start_time", None)
         self.end_time = config["dml"]["by_time"].get("end_time", None)

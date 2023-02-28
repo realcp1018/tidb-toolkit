@@ -1,16 +1,18 @@
 # Introduction
 **Toolkits is for TiDB.**
-1. *Flashback the whole table to a time point which is before gc_safe_point.*
-2. *Run sql on a table which has billions of records, sql will be split into tasks/batches automatically.*
+1. *Run sql on a table which has billions of records, sql will be split into tasks/batches automatically.*
     * *by id (use primary-key id or internal _tidb_rowid)*
     * *by time (use a date/datetime/time-related numerical column)*
-3. *Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data distribution of your cluster.*
+2. *Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data distribution of your cluster.*
+3. *Flashback the whole table to a time point which is before gc_safe_point.* **[Deprecated]**  *use [Binlog reparo tool](https://github.com/realcp1018/tidb-binlog) instead.*
 
 # Python
 ![](https://img.shields.io/static/v1?label=Python&message=3.6&color=green&?style=for-the-badge)
 
 #### Requirements 
 *Run "python3 -m pip install -r requirements.txt" for dependencies.*
+
+Add project path to PYTHONPATH before run.
 
 # Examples
 **1. Flashback table tb1kb_1**
@@ -56,12 +58,14 @@ python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
 **4. Show Store/Reions of a cluster**
 ```
 # Examples:
-python tk_pdctl.py -u <pd ip:port> -o showStores
+python3 tk_pdctl.py -u <pd ip:port> -o showStores
 # Location-Label Rules: host (force: false)
 StoreAddr                StoreID        State          LCt/RCt        LWt/RWt ...
 ---------                -------        -----          -------        ------- ...
 1.1.1.1:20171            6              Up             3370/10910     1/1     ... 
 ```
+![img1](images/1.png)
+
 # Notes
 **About tk_dml_byid.py and tk_dml_bytime.py:**
 
