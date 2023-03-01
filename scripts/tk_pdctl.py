@@ -63,7 +63,8 @@ class OptionHandler(object):
         self.__interval = interval
         self.__store_formatter = Formatter(
             column_definition={
-                "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "SpaceUsed": 15, "StartTime": 30,
+                "StoreAddr": 25, "StoreID": 15, "State": 15, "LCt/RCt": 15, "LWt/RWt": 10, "SpaceUsed": 15,
+                "StartTime": 30,
                 "Labels": 64
             })
         self.__region_formatter = Formatter(
@@ -84,11 +85,11 @@ class OptionHandler(object):
         for store in stores:
             if store.store_id == self.__storeID:
                 self.__store_formatter.print_record((store.address, store.store_id, store.state_name,
-                                                   "%s/%s" % (store.leader_count, store.region_count),
-                                                   "%s/%s" % (store.leader_weight, store.region_weight),
-                                                   store.space_used_ratio, store.start_ts,
-                                                   [{l.get('key'): l.get('value')} for l in store.labels])
-                                                  )
+                                                     "%s/%s" % (store.leader_count, store.region_count),
+                                                     "%s/%s" % (store.leader_weight, store.region_weight),
+                                                     store.space_used_ratio, store.start_ts,
+                                                     [{l.get('key'): l.get('value')} for l in store.labels])
+                                                    )
                 pdconfig.print_warn_configs()
                 return
         print("Error: Store ID %d not exist!" % self.__storeID)
@@ -102,10 +103,10 @@ class OptionHandler(object):
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
             self.__store_formatter.print_record((store.address, store.store_id, store.state_name,
-                                               "%s/%s" % (store.leader_count, store.region_count),
-                                               "%s/%s" % (store.leader_weight, store.region_weight),
-                                                 store.space_used_ratio,
-                                                 store.start_ts, [{l.get('key'): l.get('value')} for l in store.labels]))
+                                                 "%s/%s" % (store.leader_count, store.region_count),
+                                                 "%s/%s" % (store.leader_weight, store.region_weight),
+                                                 store.space_used_ratio, store.start_ts,
+                                                 [{l.get('key'): l.get('value')} for l in store.labels]))
         pdconfig.print_warn_configs()
 
     # for single region
@@ -126,10 +127,8 @@ class OptionHandler(object):
             PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
         else:
             PendingPeersStoreID = []
-        self.__region_formatter.print_record(((region.region_id, storeList, leader,
-                                             leaderAddr, downPeersStoreID,
-                                             PendingPeersStoreID, region.approximate_size,
-                                             region.approximate_keys)))
+        self.__region_formatter.print_record(((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
+                                               PendingPeersStoreID, region.approximate_size, region.approximate_keys)))
 
     # for all regions(default show limit 5)
     def showRegions(self):
@@ -147,11 +146,8 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            self.__region_formatter.print_record((region.region_id, storeList, leader,
-                                                leaderAddr, downPeersStoreID,
-                                                PendingPeersStoreID,
-                                                region.approximate_size,
-                                                region.approximate_keys))
+            self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
+                                                  PendingPeersStoreID, region.approximate_size, region.approximate_keys))
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
@@ -173,11 +169,8 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                self.__region_formatter.print_record((region.region_id, storeList, leader,
-                                                    leaderAddr, downPeersStoreID,
-                                                    PendingPeersStoreID,
-                                                    region.approximate_size,
-                                                    region.approximate_keys))
+                self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
+                                                      PendingPeersStoreID, region.approximate_size, region.approximate_keys))
                 j += 1
             i += 1
 
@@ -201,11 +194,8 @@ class OptionHandler(object):
                     PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
                 else:
                     PendingPeersStoreID = []
-                self.__region_formatter.print_record((region.region_id, storeList, leader,
-                                                    leaderAddr, downPeersStoreID,
-                                                    PendingPeersStoreID,
-                                                    region.approximate_size,
-                                                    region.approximate_keys))
+                self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
+                                                      PendingPeersStoreID, region.approximate_size, region.approximate_keys))
                 j += 1
             i += 1
 
@@ -229,11 +219,8 @@ class OptionHandler(object):
                 PendingPeersStoreID = [p["store_id"] for p in region.pending_peers]
             else:
                 PendingPeersStoreID = []
-            self.__region_formatter.print_record((region.region_id, storeList, leader,
-                                                leaderAddr, downPeersStoreID,
-                                                PendingPeersStoreID,
-                                                region.approximate_size,
-                                                region.approximate_keys))
+            self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
+                                                  PendingPeersStoreID, region.approximate_size, region.approximate_keys))
 
     def removeRegionPeer(self):
         if not self.__storeID or not self.__regionID:
@@ -301,7 +288,7 @@ class OptionHandler(object):
 
 class PDConfig(object):
     def __init__(self, location_labels=None, strictly_match_label=None, high_space_ratio=None, low_space_ratio=None,
-                 label_property=None, evict_leader_scheduler: bool=False):
+                 label_property=None, evict_leader_scheduler: bool = False):
         # replication configs
         self.location_labels = location_labels
         self.strictly_match_label = strictly_match_label
@@ -332,7 +319,8 @@ class PDConfig(object):
         return cls(**cls_kwargs)
 
     def print_core_configs(self):
-        color.print_green("# Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels,self.strictly_match_label))
+        color.print_green(
+            "# Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels, self.strictly_match_label))
         color.print_green("# Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
 
     def print_warn_configs(self):
@@ -340,9 +328,11 @@ class PDConfig(object):
         # return warning msg when those are set
         msg = []
         if self.label_property:
-            msg.append("label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
+            msg.append(
+                "label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
         if self.evict_leader_scheduler:
-            msg.append("evict-leader-scheduler was set! Please reset it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
+            msg.append(
+                "evict-leader-scheduler was set! Check if the stores are tobstone or remove it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
         if msg:
             color.print_red("WARN:")
         for warn in msg:
