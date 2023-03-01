@@ -281,7 +281,7 @@ class SQLOperator(object):
                     log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
                     self.connction_pool.put(conn)
             if retry == 3:
-                log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")git
+                log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
                 os.kill(os.getpid(), signal.SIGINT)
         else:
             log.info(f"Task On [{start},{stop}) Dry Run:\nSQL: {batch_sql}")
