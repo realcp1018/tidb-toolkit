@@ -147,7 +147,8 @@ class OptionHandler(object):
             else:
                 PendingPeersStoreID = []
             self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
-                                                  PendingPeersStoreID, region.approximate_size, region.approximate_keys))
+                                                  PendingPeersStoreID, region.approximate_size,
+                                                  region.approximate_keys))
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
@@ -170,7 +171,8 @@ class OptionHandler(object):
                 else:
                     PendingPeersStoreID = []
                 self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
-                                                      PendingPeersStoreID, region.approximate_size, region.approximate_keys))
+                                                      PendingPeersStoreID, region.approximate_size,
+                                                      region.approximate_keys))
                 j += 1
             i += 1
 
@@ -195,7 +197,8 @@ class OptionHandler(object):
                 else:
                     PendingPeersStoreID = []
                 self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
-                                                      PendingPeersStoreID, region.approximate_size, region.approximate_keys))
+                                                      PendingPeersStoreID, region.approximate_size,
+                                                      region.approximate_keys))
                 j += 1
             i += 1
 
@@ -220,7 +223,8 @@ class OptionHandler(object):
             else:
                 PendingPeersStoreID = []
             self.__region_formatter.print_record((region.region_id, storeList, leader, leaderAddr, downPeersStoreID,
-                                                  PendingPeersStoreID, region.approximate_size, region.approximate_keys))
+                                                  PendingPeersStoreID, region.approximate_size,
+                                                  region.approximate_keys))
 
     def removeRegionPeer(self):
         if not self.__storeID or not self.__regionID:
@@ -311,7 +315,7 @@ class PDConfig(object):
             if k.replace("-", "_") in config_proto.__dir__():
                 cls_kwargs[k.replace("-", "_")] = v
         for scheduler in resp["schedule"]["schedulers-v2"]:
-            if scheduler["type"].__contains__("evict-leader") and scheduler["disable"] == False:
+            if scheduler["type"].__contains__("evict-leader") and scheduler["disable"] is False:
                 cls_kwargs["evict_leader_scheduler"] = True
         for k, v in resp.items():
             if k.replace("-", "_") in config_proto.__dir__():
@@ -324,15 +328,13 @@ class PDConfig(object):
         color.print_green("# Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
 
     def print_warn_configs(self):
-        # set label-property or evict-leader-scheduler will cause imbalanced data between zone/rack/host
+        # set label-property or evict-leader-scheduler will cause imbalanced data distribution
         # return warning msg when those are set
         msg = []
         if self.label_property:
-            msg.append(
-                "label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
+            msg.append("label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
         if self.evict_leader_scheduler:
-            msg.append(
-                "evict-leader-scheduler was set! Check if the stores are tobstone or remove it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
+            msg.append("evict-leader-scheduler was set! Check if the stores are tombstone or remove it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
         if msg:
             color.print_red("WARN:")
         for warn in msg:
