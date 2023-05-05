@@ -2,7 +2,8 @@
 **Toolkits is for TiDB.**
 1. *Run sql on a table which has billions of records, sql will be split into tasks/batches automatically.*
     * *by id (use primary-key id or internal _tidb_rowid)*
-    * *by time (use a date/datetime/time-related numerical column)*
+    * *by time (use a date/datetime/time-related numerical column)* 
+    * **[NEW]** *chunk update(split sql into chunks use rowid, regardless of auto_random or shard_rowid_bits)* 
 2. *Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data distribution of your cluster.*
 3. *Flashback the whole table to a time point which is before gc_safe_point.* **[Deprecated]**  *use [Binlog reparo tool](https://github.com/realcp1018/tidb-binlog) instead.*
 
@@ -12,12 +13,16 @@
 #### Requirements 
 *Run "python3 -m pip install -r requirements.txt" for dependencies.*
 
-Add project path to PYTHONPATH before run.
+Add project path to PYTHONPATH before run:
+```
+# let's say the repo is in /data
+export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
+```
 
 # Examples
 **1. Flashback table tb1kb_1** *[Deprecated]*
 ```
-# edit tidb.toml basic and flashback part
+# edit tidb.toml [basic] and [flashback] part
 ...
 db = "test"
 table ="tb1kb_1"
@@ -29,7 +34,7 @@ python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
 ```
 **2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)**
 ```
-# update tidb.toml's basic, dml and dml.by_id part
+# update tidb.toml's [basic], [dml] and [dml.by_id] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -41,7 +46,7 @@ python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
 ```
 **3. Execute "delete from where ..." on big table tb1kb_1(table sharded)**
 ```
-# update tidb.toml's basic, dml and dml.by_time part
+# update tidb.toml's [basic], [dml] and [dml.by_time] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -81,7 +86,7 @@ StoreAddr                StoreID        State          LCt/RCt        LWt/RWt   
 ```
 
 # Notes
-**About tk_dml_byid.py and tk_dml_bytime.py:**
+**1. About tk_dml_byid.py and tk_dml_bytime.py:**
 
 Following sql types supported：
 ```
@@ -99,3 +104,25 @@ By time:
 >* Every task run batches serially, default batch size = 1000(`task sql will be suffixed by [limit 1000] and run multiple times until affected_rows=0`).
 >* There will be <max_workers> tasks run simultaneously.
 >* Run `grep Finished <log-name> | tail` to get how many tasks finished.
+
+**2. About tk_chunk_update.py:**
+
+A promoted way compared with `tk_dml_byid.py` and `tk_dml_bytime.py` when you want to do dml on a large table.
+```
+# update tidb.toml's [basic] [dml] and [dml.chunk_update] part
+# Run:
+python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l <log-path>.log
+```
+Chunk update:
+>* SQL will be splitted into multiple chunks by rowid, just like by_id
+>* by_id will process a lot of unused rowids because these rowid may not exits, while chunk_update use `order by rowid limit <chunk_size>` to produce chunks    
+>* by_id can not process tables which shard_rowid_bits/auto_random was set, while chunk_update can be used with all tidb tables
+>* by_time still can be used when you just want to process the target time range, by_id and chunk_update will scan all the rowids
+
+**3. About savepoint**
+
+tk_dml_by_id.py and tk_chunk_update.py will write savepoint on running.
+If process failed or stopped, just rerun it and the savepoint will be used as start rowid
+
+tk_dml_by_time.py will **not** write savepoint on running. If process failed or stopped you can set a new 
+start_time in tidb.toml

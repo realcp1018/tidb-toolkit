@@ -16,6 +16,8 @@ class Config(object):
         self.until_time, self.override = None, None
         # dml config
         self.sql, self.execute, self.savepoint = None, None, None
+        # chunk update
+        self.chunk_size = None
         # by id
         self.start_rowid, self.end_rowid = None, None
         # by time
@@ -42,6 +44,9 @@ class Config(object):
         # dml config
         self.sql = config["dml"]["sql"]
         self.execute = config["dml"].get("execute", False)
+        self.savepoint = config["dml"].get("savepoint", None)
+        # chunk update
+        self.chunk_size = config["dml"]["chunk_update"].get("chunk_size", 5000)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
         self.end_rowid = config["dml"]["by_id"].get("end_rowid", None)

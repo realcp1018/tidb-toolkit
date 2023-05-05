@@ -35,7 +35,7 @@ SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by id).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="Log File Name, Default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, help="log file name, default <host>.log.<now>")
     args = parser.parse_args()
     return args
 
