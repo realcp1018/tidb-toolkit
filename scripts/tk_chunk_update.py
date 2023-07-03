@@ -212,7 +212,7 @@ class Chunk(object):
                 if 'conn' in locals():
                     pool.put(conn)
         if retry_time == retry_limit:
-            log.error(f"chunk {self.seq} Retry All {retry_limit} Times Failed, Exit Now")
+            log.error(f"chunk {self.seq} Retry All {retry_limit} Times Failed, Exit Now [sql={self.sql_text}]")
             os.kill(os.getpid(), signal.SIGINT)
 
 
