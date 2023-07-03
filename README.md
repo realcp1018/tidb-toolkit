@@ -119,6 +119,10 @@ Chunk update:
 >* by_id can not process tables which shard_rowid_bits/auto_random was set, while chunk_update can be used with all tidb tables
 >* by_time still can be used when you just want to process the target time range, by_id and chunk_update will scan all the rowids
 
+See complete percentage with:
+
+`tailf <log-file>|grep "write savepoint"`
+
 **3. About savepoint**
 
 tk_dml_by_id.py and tk_chunk_update.py will write savepoint on running.
