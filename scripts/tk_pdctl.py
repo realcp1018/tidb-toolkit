@@ -376,6 +376,8 @@ class Store(object):
 
     @property
     def space_used_ratio(self) -> str:
+        if ByteSize(self.capacity).get() == 0:
+            return "unknown"
         return f'{1 - (ByteSize(self.available).get() / ByteSize(self.capacity).get()) :.2%}'
 
     @classmethod

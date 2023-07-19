@@ -12,6 +12,7 @@ Usage:
 
 class ByteSize(object):
     BYTE_SIZE_MAP = {
+        "B": 1,
         "KiB": 1 << 10,
         "MiB": 1 << 20,
         "GiB": 1 << 30,
@@ -24,8 +25,9 @@ class ByteSize(object):
     def get(self):
         for unit, size_factor in self.BYTE_SIZE_MAP.items():
             if self.__size.endswith(unit):
-                return float(self.__size.strip(unit)) * size_factor
+                byte_size = float(self.__size.strip(unit)) * size_factor
+                return byte_size
 
 
 if __name__ == '__main__':
-    print(ByteSize("1MiB").get())
+    print(ByteSize("0B").get() == 0)
