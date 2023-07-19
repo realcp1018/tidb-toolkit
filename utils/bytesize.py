@@ -12,11 +12,11 @@ Usage:
 
 class ByteSize(object):
     BYTE_SIZE_MAP = {
-        "B": 1,
         "KiB": 1 << 10,
         "MiB": 1 << 20,
         "GiB": 1 << 30,
-        "TiB": 1 << 40
+        "TiB": 1 << 40,
+        "B": 1
     }
 
     def __init__(self, size: str):
