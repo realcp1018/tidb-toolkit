@@ -16,16 +16,32 @@ from pprint import pprint
 from typing import List
 
 # Const
-ALL_SUPPORT_ACTIONS = ["showStore", "showStores",
-                       "showRegion", "showRegions",
-                       "showStoreRegions",
-                       "showRegions1Peer",
-                       "showRegions2Peer",
-                       "showRegions3Peer",
-                       "showRegions4Peer",
-                       "showRegionsNoLeader",
-                       "removeRegionPeer",
-                       "removeStorePeers"]
+ALL_SUPPORT_ACTIONS = {
+    "showStore":
+        "list a store's detail info specified by <store-id>",
+    "showStores":
+        "list all the stores detail info",
+    "showRegion":
+        "list a region's detail info specified by <region-id>",
+    "showRegions":
+        "list all the regions in cluster, limit by <limit>(order by size)",
+    "showStoreRegions":
+        "list all the regions on a specific <store-id>, limit by <limit>",
+    "showRegions1Peer":
+        "list all the regions with only 1 peer, limit by <limit>",
+    "showRegions2Peer":
+        "list all the regions with only 2 peers, limit by <limit>",
+    "showRegions3Peer":
+        "list all the regions with 3 peers, limit by <limit>",
+    "showRegions4Peer":
+        "list all the regions with 4 peers, limit by <limit>",
+    "showRegionsNoLeader":
+        "list all the regions with no leader, limit by <limit>",
+    "removeRegionPeer":
+        "remove a region's peer on specific store specified by <region-id> and <store-id>",
+    "removeStorePeers":
+        "remove all the region peers on a specific <store-id>",
+}
 # TODO:
 #  safeRemoveRegionPeer, safeRemoveStorePeers: remove peer/peers when len(Region peers on Up stores after removed)>=2
 
@@ -36,11 +52,11 @@ color = Color()
 
 # arg parse
 def argParse():
-    parser = argparse.ArgumentParser(description="pd http api store/region info formatter.")
-    parser.add_argument("-u", metavar="<pd-addr>", dest="url", required=True, type=str,
+    parser = argparse.ArgumentParser(description="pd http api store/region info formatter.", formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("-u", metavar="<ip:addr>", dest="url", required=True, type=str,
                         help="pd addr, format ip:port, for example 127.0.0.1:2379")
-    parser.add_argument("-o", metavar="<option>", dest="option", choices=ALL_SUPPORT_ACTIONS, default="showStores",
-                        help="store/region options, default `showStores`, Options: %s" % ALL_SUPPORT_ACTIONS)
+    parser.add_argument("-o", metavar="<option>", dest="option", choices=ALL_SUPPORT_ACTIONS.keys(), default="showStores",
+                        help="store/region options, default `showStores`, Options: \n%s" % "\n".join([k+":\n\t"+v for k, v in ALL_SUPPORT_ACTIONS.items()]))
     parser.add_argument("-s", metavar="<store-id>", dest="storeID", type=int,
                         help="store id")
     parser.add_argument("-r", metavar="<region-id>", dest="regionID", type=int,
@@ -132,7 +148,7 @@ class OptionHandler(object):
 
     # for all regions(default show limit 5)
     def showRegions(self):
-        regions = Region.from_api_all_limit(pd_addr=self.__url, limit=self.__limit)
+        regions = Region.from_api_limit_by_size(pd_addr=self.__url, limit=self.__limit)
         self.__region_formatter.print_header()
         for region in regions:
             storeList = [p["store_id"] for p in region.peers]
@@ -152,7 +168,6 @@ class OptionHandler(object):
 
     def showRegionsNPeer(self, n):
         regions = Region.from_api_all(pd_addr=self.__url)
-        color.print_green("# {0}PeerRegions(limit {1}):".format(n, self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j < self.__limit:
@@ -208,7 +223,6 @@ class OptionHandler(object):
             print("Error: Store ID should be specified!")
             exit(1)
         regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
-        color.print_green("# Top {0} Regions(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
@@ -262,6 +276,7 @@ class OptionHandler(object):
             i += 1
 
     def run(self):
+        color.print_cyan("PD Addr: {0}".format(self.__url))
         if self.__option == "showStore":
             self.showStore()
         elif self.__option == "showStores":
@@ -269,18 +284,25 @@ class OptionHandler(object):
         elif self.__option == "showRegion":
             self.showRegion()
         elif self.__option == "showRegions":
+            print("[Display Limit(order by size)]: %d" % self.__limit)
             self.showRegions()
         elif self.__option == "showStoreRegions":
+            print("[Display Limit]: %d" % self.__limit)
             self.showStoreRegions()
         elif self.__option == "showRegions1Peer":
+            print("[Display Limit]: %d" % self.__limit)
             self.showRegionsNPeer(n=1)
         elif self.__option == "showRegions2Peer":
+            print("[Display Limit]: %d" % self.__limit)
             self.showRegionsNPeer(n=2)
         elif self.__option == "showRegions3Peer":
+            print("[Display Limit]: %d" % self.__limit)
             self.showRegionsNPeer(n=3)
         elif self.__option == "showRegions4Peer":
+            print("[Display Limit]: %d" % self.__limit)
             self.showRegionsNPeer(n=4)
         elif self.__option == "showRegionsNoLeader":
+            print("[Display Limit]: %d" % self.__limit)
             self.showRegionsNoLeader()
         elif self.__option == "removeRegionPeer":
             self.removeRegionPeer()
@@ -323,18 +345,20 @@ class PDConfig(object):
         return cls(**cls_kwargs)
 
     def print_core_configs(self):
-        color.print_green(
-            "# Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels, self.strictly_match_label))
-        color.print_green("# Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
+        print("PD Core Configs:")
+        print(">> Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels, self.strictly_match_label))
+        print(">> Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
 
     def print_warn_configs(self):
         # set label-property or evict-leader-scheduler will cause imbalanced data distribution
         # return warning msg when those are set
         msg = []
         if self.label_property:
-            msg.append("label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
+            msg.append(
+                "label_property was set! Please reset it in pdctl by `config delete label-property ...` statement!")
         if self.evict_leader_scheduler:
-            msg.append("evict-leader-scheduler was set! Check if the stores are tombstone or remove it in pdctl by `scheduler remove evict-leader-scheduler` statement!")
+            msg.append(
+                "evict-leader-scheduler was set! Check if the stores are tombstone or remove it in pdctl!")
         if msg:
             color.print_red("WARN:")
         for warn in msg:
@@ -501,11 +525,11 @@ class Region(object):
         return all_regions
 
     @classmethod
-    def from_api_all_limit(cls, pd_addr, limit=5):
+    def from_api_limit_by_size(cls, pd_addr, limit=5):
         region_proto = Region()
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr
-        resp = requests.get("%s/regions/readflow?limit=%d" % (pd_url, limit),
+        resp = requests.get("%s/regions/size?limit=%d" % (pd_url, limit),
                             headers={"content-type": "application/json"})
         if resp.status_code != 200:
             raise Exception(resp.text)

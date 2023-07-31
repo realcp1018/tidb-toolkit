@@ -35,9 +35,8 @@ class Formatter(object):
         for field_name, field_length in self.__column_definition.items():
             header_fields.append(field_name)
             header_cutlines.append(self.get_cutline(len(field_name)))
-        c = Color()
-        c.print_yellow(self.__column_format % tuple(header_fields))
-        c.print_yellow(self.__column_format % tuple(header_cutlines))
+        print(self.__column_format % tuple(header_fields))
+        print(self.__column_format % tuple(header_cutlines))
 
     def print_record(self, record: Sequence):
         if len(record) != len(self.__column_definition):
