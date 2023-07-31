@@ -193,7 +193,6 @@ class OptionHandler(object):
 
     def showRegionsNoLeader(self):
         regions = Region.from_api_all(pd_addr=self.__url)
-        color.print_green("# RegionsNoLeader(limit {0}):".format(self.__limit))
         self.__region_formatter.print_header()
         i = j = 0
         while i < len(regions) and j < self.__limit:
