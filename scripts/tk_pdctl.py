@@ -95,7 +95,7 @@ class OptionHandler(object):
             print("Error: Store ID should be specified!")
             exit(1)
         pdconfig = PDConfig.from_api(self.__url)
-        stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
+        stores = Store.from_api_all(pd_addr=self.__url, all_state=True)
         pdconfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in stores:
@@ -114,7 +114,7 @@ class OptionHandler(object):
     # for all stores
     def showStores(self):
         pdconfig = PDConfig.from_api(self.__url)
-        stores = Store.from_api_all(pd_addr=self.__url, all_state=False)
+        stores = Store.from_api_all(pd_addr=self.__url, all_state=True)
         pdconfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
