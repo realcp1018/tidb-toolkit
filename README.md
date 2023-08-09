@@ -63,7 +63,7 @@ start_time = "2021-01-01 00:00:00"
 end_time = "2021-12-31 00:00:00"
 execute = false
 # Run:
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
+python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log
 ```
 **4. Execute "delete from where ..." on big table tb1kb_1(table sharded or not, just use chunk update)**
 ```
