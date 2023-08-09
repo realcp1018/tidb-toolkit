@@ -119,7 +119,7 @@ tk_chunk_update是最通用的，相比tk_dml_by_id可以避免大量无效rowid
 **其原理如下**, 首先ChunkSpliter.split()通过如下查询条件获取chunk的右边界：
 ```sql
 select max(rowid) from 
-   (select rowid from table_name where rowid > current_rowid order by rowid limit 0,chunk_size) t`
+   (select rowid from table_name where rowid > current_rowid order by rowid limit 0,chunk_size) t
 ```
 并以current_rowid作为chunk左边界，然后生成拆分后的SQL，输出一个Chunk同时将current_rowid推进至chunk右边界以便下一个chunk拆分使用，而split()是一个python生成器。
 

@@ -114,7 +114,7 @@ And:
 
 `chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rows=1000] [sql=...]`
 
-where split_time > duration, that means the chunk produce speed is slow than consumption, so there's only 1 sql running at a time .
+where split_time > duration, that means the chunk produce speed is slower than consumption, so there's only 1 sql running at a time .
 
 And when you encounter a performance degradation, use tk_dml_by_id/tk_dml_by_time instead.
 
