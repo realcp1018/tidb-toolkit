@@ -139,7 +139,7 @@ class SavePoint(object):
             with open(self.file_name) as f:
                 v = f.read()
                 return int(v) if v else 0
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return 0
 
     def set(self, savepoint: int):
@@ -219,7 +219,7 @@ class Chunk(object):
 
 # split _Sql into multiple _Chunks
 class ChunkSpliter(object):
-    def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 10000):
+    def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 5000):
         self.sql = sql
         self.table = table
         self.pool = pool
