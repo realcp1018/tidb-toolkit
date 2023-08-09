@@ -104,7 +104,7 @@ StoreAddr                StoreID        State          LCt/RCt        LWt/RWt   
 **1. 如何在tk_chunk_update 和 tk_dml_by_id, tk_dml_by_time之间做出选择？**
 
 tk_chunk_update是最通用的，相比tk_dml_by_id可以避免大量无效rowid扫描，相比tk_dml_by_time则单条SQL执行更快。
-而且tk_chunk_update无需认为进行表的类型判断，适用性高。
+而且tk_chunk_update无需人为进行表的类型判断，适用性高。
 
 但是如果表包含大量空region，那么使用tk_chunk_update可能遭遇性能衰退的窘境，此时在执行日志中你会看到如下情况：
 
