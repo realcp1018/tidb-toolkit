@@ -217,7 +217,7 @@ class Chunk(object):
             os.kill(os.getpid(), signal.SIGINT)
 
 
-# split _Sql into multiple _Chunks
+# split Sql into multiple Chunks
 class ChunkSpliter(object):
     def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 5000):
         self.sql = sql
