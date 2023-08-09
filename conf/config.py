@@ -50,7 +50,7 @@ class Config(object):
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
         self.end_rowid = config["dml"]["by_id"].get("end_rowid", None)
-        self.savepoint = config["dml"]["by_id"].get("savepoint", None)
+        self.savepoint = config["dml"].get("savepoint", None)
         if not self.savepoint:
             self.savepoint = f"{self.host}.savepoint"
         # by time
@@ -62,3 +62,9 @@ class Config(object):
         # log_file
         if not self.log_file:
             self.log_file = f"{self.host}.log.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+
+
+if __name__ == '__main__':
+    config = Config(config_file="tidb.toml")
+    config.parse()
+    print(config.savepoint, config.log_file)
