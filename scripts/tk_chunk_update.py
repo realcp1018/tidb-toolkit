@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from queue import Queue, Empty
 from threading import Thread
 from time import sleep
-from datetime import datetime
+from datetime import datetime, timedelta
 # from pprint import pprint
 from typing import Set
 import pymysql
@@ -183,8 +183,9 @@ class Sql(object):
 
 # chunks that can be executed
 class Chunk(object):
-    def __init__(self, seq: int, start: int, stop: int, sql_text: str):
+    def __init__(self, seq: int, split_time: timedelta, start: int, stop: int, sql_text: str):
         self.seq = seq
+        self.split_time = split_time
         self.start = start
         self.end = stop
         self.sql_text = sql_text
@@ -202,7 +203,7 @@ class Chunk(object):
                     rows = c.execute(self.sql_text)
                 conn.commit()
                 end_time = datetime.now()
-                log.info(f"chunk {self.seq} Done [duration={end_time-start_time}] [rows={rows}] [sql={self.sql_text}]")
+                log.info(f"chunk {self.seq} Done [split_time={self.split_time}] [duration={end_time-start_time}] [rows={rows}] [sql={self.sql_text}]")
                 break
             except Exception as e:
                 log.error(f"chunk {self.seq} Retry Time {retry_time} Failed [error={e}]")
@@ -229,6 +230,7 @@ class ChunkSpliter(object):
         current_rowid = self.table.rowid_min
         conn = self.pool.get()
         while current_rowid < self.table.rowid_max:
+            start_time = datetime.now()
             query = f"select max({self.table.rowid}) from (select {self.table.rowid} from {self.table.name}  where " \
                     f"{self.table.rowid} > {current_rowid} order by {self.table.rowid} limit 0,{self.chunk_size}) t"
             with conn.cursor() as c:
@@ -236,19 +238,19 @@ class ChunkSpliter(object):
                 result = c.fetchone()
                 if len(result) == 0:
                     return
-
+            end_time = datetime.now()
             chunk_left = current_rowid
             chunk_right = result[0]
 
             if chunk_right < self.table.rowid_max:
                 chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
                             f"and `{self.sql.table_alias}`.`{self.table.rowid}` < {chunk_right})"
-                yield Chunk(seq=current_seq, start=chunk_left, stop=chunk_right, sql_text=chunk_sql)
+                yield Chunk(seq=current_seq, split_time=end_time-start_time, start=chunk_left, stop=chunk_right, sql_text=chunk_sql)
             else:
                 chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
                             f"and `{self.sql.table_alias}`.`{self.table.rowid}` <= {self.table.rowid_max})"
                 self.pool.put(conn)
-                yield Chunk(seq=current_seq, start=chunk_left, stop=self.table.rowid_max, sql_text=chunk_sql)
+                yield Chunk(seq=current_seq, split_time=end_time-start_time, start=chunk_left, stop=self.table.rowid_max, sql_text=chunk_sql)
 
             current_seq += 1
             current_rowid = chunk_right
