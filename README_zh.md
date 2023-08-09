@@ -5,7 +5,7 @@
     * *by time (通过 date/datetime/time-related numerical 等时间列/数字时间列进行拆分)*
     * **[新增]** *chunk update(通过rowid分进行动态定界和拆分，兼容auto_random或设置了shard_rowid_bits的表)* 
 2. *格式化打印tidb集群的 stores/regions/location-labels 信息, 以及一些核心的pd配置信息和警告，可以迅速厘清集群的region分布情况*
-3. *闪回整表至gc_safe_point之后的任意时间点* **[废弃]**
+3. *闪回整表至gc_safe_point之后的任意时间点* **[可用，但不推荐]**
 
 # Python环境
 ![py1](images/1.svg)
@@ -20,7 +20,7 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 ```
 
 # 全部示例：
-**1. 闪回表 tb1kb_1** *[废弃]*
+**1. 闪回表 tb1kb_1** *[可用，但不推荐]*
 ```
 # 编辑 tidb.toml 的[basic] 和 [flashback] 部分，其他部分的设置不影响本次运行
 ...
