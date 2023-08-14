@@ -170,8 +170,7 @@ class Sql(object):
         # 2
         sql_tokens = parsed_sql.tokens
         for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) and (
-                    token.value.split()[0].lower() == self.table.name.lower()):
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
                 self.table_alias = token.get_alias() if token.get_alias() else self.table.name
                 break
         # 3
@@ -203,7 +202,8 @@ class Chunk(object):
                     rows = c.execute(self.sql_text)
                 conn.commit()
                 end_time = datetime.now()
-                log.info(f"chunk {self.seq} Done [split_time={self.split_time}] [duration={end_time-start_time}] [rows={rows}] [sql={self.sql_text}]")
+                log.info(f"chunk {self.seq} Done [split_time={self.split_time}] [duration={end_time-start_time}] "
+                         f"[rows={rows}] [sql={self.sql_text}]")
                 break
             except Exception as e:
                 log.error(f"chunk {self.seq} Retry Time {retry_time} Failed [error={e}]")
@@ -214,7 +214,7 @@ class Chunk(object):
                     pool.put(conn)
         if retry_time == retry_limit:
             log.error(f"chunk {self.seq} Retry All {retry_limit} Times Failed, Exit Now [sql={self.sql_text}]")
-            os.kill(os.getpid(), signal.SIGINT)
+            os._exit(1)  # exit main process
 
 
 # split Sql into multiple Chunks
@@ -260,7 +260,7 @@ class Executor(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql_text: str = None,
                  chunk_size: int = 5000, max_workers: int = 50, savepoint_file: str = None, execute: bool = False):
         self.table: Table = table
-        self.sql_text = sql_text.strip(";")
+        self.sql_text = sql_text
         self.chunk_size = chunk_size
         self.max_workers = max_workers
         self.savepoint = SavePoint(file_name=savepoint_file) if savepoint_file else None
@@ -326,7 +326,7 @@ if __name__ == '__main__':
     pool.put(conn)
 
     # run
-    executor = Executor(pool=pool, table=table, sql_text=conf.sql, savepoint_file=conf.savepoint, execute=conf.execute)
+    executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), savepoint_file=conf.savepoint, execute=conf.execute)
     start_time = datetime.now()
     executor.run()
     end_time = datetime.now()

@@ -163,7 +163,7 @@ class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
                  max_workers=None, start_rowid=None, end_rowid=None, savepoint: SavePoint = None, execute=None):
         self.table: Table = table
-        self.sql = sql.strip(";")
+        self.sql = sql
         self.concat_table_name = None
         self.batch_size = batch_size
         self.max_workers = max_workers
@@ -194,8 +194,7 @@ class SQLOperator(object):
         # 3
         sql_tokens = parsed_sql.tokens
         for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) \
-                    and (token.value.split(" ")[0].lower() == self.table.name.lower()):
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
                 self.concat_table_name = token.get_alias() if token.get_alias() else self.table.name
                 break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
@@ -271,7 +270,7 @@ class SQLOperator(object):
                     self.connction_pool.put(conn)
             if retry == 3:
                 log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
-                os.kill(os.getpid(), signal.SIGINT)
+                os._exit(1)
         else:
             log.info(f"Batch {batch_id} of {max_batch_id} Dry Run:\nSQL: {batch_sql}")
 
@@ -297,7 +296,7 @@ if __name__ == '__main__':
     pool.put(conn)
 
     # start sql operator
-    operator = SQLOperator(pool=pool, table=table, sql=conf.sql, batch_size=conf.batch_size, execute=conf.execute,
+    operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size, execute=conf.execute,
                            max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
                            savepoint=SavePoint(conf.savepoint))
     operator.validate()

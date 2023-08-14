@@ -143,7 +143,7 @@ class SQLOperator(object):
                  split_column_precision=None,
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
         self.table: Table = table
-        self.sql = sql.strip(";")
+        self.sql = sql
         self.concat_table_name = None
         self.split_interval = int(split_interval) if split_interval else 86400
         self.split_column_precision = int(split_column_precision) if split_column_precision else 0
@@ -178,7 +178,7 @@ class SQLOperator(object):
         # 3
         sql_tokens = parsed_sql.tokens
         for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) and (token.value.split(" ")[0].lower() == self.table.name.lower()):
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
                 self.concat_table_name = token.get_alias() if token.get_alias() else self.table.name
                 break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
@@ -308,7 +308,7 @@ if __name__ == '__main__':
     pool.put(conn)
 
     # start a sql operator
-    operator = SQLOperator(pool=pool, sql=conf.sql, table=table, split_interval=conf.split_interval,
+    operator = SQLOperator(pool=pool, sql=conf.sql.strip().strip(";"), table=table, split_interval=conf.split_interval,
                            split_column_precision=conf.split_column_precision,
                            start_time=conf.start_time, end_time=conf.end_time, batch_size=conf.batch_size,
                            max_workers=conf.max_workers, execute=conf.execute)
