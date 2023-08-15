@@ -26,8 +26,8 @@ execute = false
 # savepoint = "savepoint"
 
 [dml.chunk_update]
-## records count in a chunk, default 5000
-chunk_size = 5000
+## records count in a chunk, default 1000
+chunk_size = 1000
 
 
 [dml.by_id]

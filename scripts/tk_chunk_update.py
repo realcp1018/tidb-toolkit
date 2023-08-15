@@ -219,7 +219,7 @@ class Chunk(object):
 
 # split Sql into multiple Chunks
 class ChunkSpliter(object):
-    def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 5000):
+    def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 1000):
         self.sql = sql
         self.table = table
         self.pool = pool
