@@ -150,15 +150,15 @@ class SavePoint(object):
 # format and validate the input sql
 class Sql(object):
     def __init__(self, text: str, table: Table):
-        self.text = text
-        self.table = table
-        self.table_alias = None
+        self.text: str = text
+        self.table: Table = table
+        self.table_alias: str = None
 
     def validate(self):
         log.info("Validating SQL Start...")
         """
         1.only SUPPORTED_SQL_TYPES are supported
-        2.set table alias(to table.name if no alias)
+        2.set table alias(to table.name if no alias) && add tableRangeScan hint /*+ use_index(table_name) */
         3.exit when no where condition
         """
         self.text = sqlparse.format(self.text, use_space_around_operators=True, keyword_case="upper")
@@ -168,16 +168,19 @@ class Sql(object):
         if sql_type not in SUPPORTED_SQL_TYPES:
             raise Exception(f"Unsupported SQL type: {sql_type}!")
         # 2
-        sql_tokens = parsed_sql.tokens
+        sql_tokens: sqlparse.sql.TokenList = parsed_sql.tokens
         for token in sql_tokens:
             if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
                 self.table_alias = token.get_alias() if token.get_alias() else self.table.name
                 break
+        for token in sql_tokens:
+            if token.ttype == sqlparse.tokens.Keyword and token.value == "FROM":
+                self.text = self.text.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
+                break
         # 3
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
-            log.warning("No where condition in SQL(try with `WHERE 1=1`)")
-            self.text += " WHERE 1=1"
+            raise Exception("No where condition in SQL(try with `WHERE 1=1`)")
 
 
 # chunks that can be executed

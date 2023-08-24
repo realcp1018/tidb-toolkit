@@ -163,8 +163,8 @@ class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
                  max_workers=None, start_rowid=None, end_rowid=None, savepoint: SavePoint = None, execute=None):
         self.table: Table = table
-        self.sql = sql
-        self.concat_table_name = None
+        self.sql: str = sql
+        self.table_alias = None
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.start_rowid = int(start_rowid) if start_rowid else self.table.rowid_min
@@ -178,7 +178,7 @@ class SQLOperator(object):
         """
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
-        3.exit when no where conditions in sql
+        3.exit when no where conditions in sql && add tableRangeScan hint /*+ use_index(table_name) */
         4.exit if table was sharded(SHARD_ROW_ID_BITS or auto_random)
         5.set start_rowid to max of [start_rowid, savepoint]
         """
@@ -195,7 +195,11 @@ class SQLOperator(object):
         sql_tokens = parsed_sql.tokens
         for token in sql_tokens:
             if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
-                self.concat_table_name = token.get_alias() if token.get_alias() else self.table.name
+                self.table_alias = token.get_alias() if token.get_alias() else self.table.name
+                break
+        for token in sql_tokens:
+            if token.ttype == sqlparse.tokens.Keyword and token.value == "FROM":
+                self.text = self.sql.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
                 break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
@@ -237,7 +241,7 @@ class SQLOperator(object):
         try:
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
-            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND (".format(self.concat_table_name,
+            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND (".format(self.table_alias,
                                                                                     self.table.rowid,
                                                                                     start, stop)
             for i in range(len(sql_tokens)):
@@ -267,7 +271,9 @@ class SQLOperator(object):
                     retry += 1
                     log.error(f"SQL Retry {retry} Failed: {batch_sql}")
                     log.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
-                    self.connction_pool.put(conn)
+                finally:
+                    if 'conn' in locals():
+                        self.connction_pool.put(conn)
             if retry == 3:
                 log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
                 os._exit(1)
