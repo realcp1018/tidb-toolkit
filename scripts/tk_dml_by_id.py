@@ -199,7 +199,7 @@ class SQLOperator(object):
                 break
         for token in sql_tokens:
             if token.ttype == sqlparse.tokens.Keyword and token.value == "FROM":
-                self.text = self.sql.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
+                self.sql = self.sql.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
                 break
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
