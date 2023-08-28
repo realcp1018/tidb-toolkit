@@ -265,7 +265,6 @@ class SQLOperator(object):
                     end_time = datetime.now()
                     log.info(f"Batch {batch_id} of {max_batch_id} OK, {affected_rows} Rows Affected ("
                              f"{end_time - start_time}).\nSQL: {batch_sql}")
-                    self.connction_pool.put(conn)
                     break
                 except Exception as e:
                     retry += 1
