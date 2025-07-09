@@ -321,7 +321,7 @@ if __name__ == '__main__':
     conn = pool.get()
     table = Table(name=conf.table, db=conf.db, conn=conn)
     table.load()
-    current_savepoint = SavePoint(file_name="savepoint").get()
+    current_savepoint = SavePoint(file_name=conf.savepoint).get()
     if current_savepoint > table.rowid_min:
         log.info(f"savepoint {current_savepoint} larger than min(rowid) {table.rowid_min}, use savepoint instead.")
         table.rowid_min = current_savepoint
