@@ -36,7 +36,7 @@ until_time = "2021-12-17 17:29:45"
 override = false
 ...
 # Run:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
 ```
 
 **2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)**

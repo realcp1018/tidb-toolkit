@@ -30,7 +30,7 @@ until_time = "2021-12-17 17:29:45"
 override = false
 ...
 # 运行:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
 ```
 
 **2. 对大表执行 "delete from where ..." (表必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**

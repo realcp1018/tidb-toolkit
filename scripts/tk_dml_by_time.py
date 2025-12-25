@@ -42,7 +42,7 @@ def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by time).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
     parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
-    parser.add_argument("-e", dest="execute", action="store_true",
+    parser.add_argument("-e", "--execute", dest="execute", action="store_true",
                         help="execute or just print the first batch by default")
     args = parser.parse_args()
     return args
