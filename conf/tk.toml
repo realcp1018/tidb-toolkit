@@ -20,8 +20,6 @@ override = false
 [dml]
 ## required for dml, only one sql a time
 sql = ""
-## true/false，execute or not(default: print the first batched sql and stop running, safe mode)
-execute = false
 ## savepoint filename, default {host}_{port}.savepoint, only used by chunk_update and by_id
 # savepoint = "your savepoint file name"
 

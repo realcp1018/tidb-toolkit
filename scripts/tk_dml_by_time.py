@@ -41,7 +41,9 @@ SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by time).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="log file name, default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-e", dest="execute", action="store_true",
+                        help="execute or just print the first batch by default")
     args = parser.parse_args()
     return args
 
@@ -143,6 +145,7 @@ class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, sql=None, table: Table = None, split_interval=None,
                  split_column_precision=None,
                  start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
+        self.pool: MySQLConnectionPool = pool
         self.table: Table = table
         self.sql = sql
         self.concat_table_name = None
@@ -153,7 +156,6 @@ class SQLOperator(object):
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.execute = execute
-        self.pool: MySQLConnectionPool = pool
 
     def validate(self):
         log.info("Checking SQL ...")
@@ -290,11 +292,11 @@ class SQLOperator(object):
 
 if __name__ == '__main__':
     args = argParse()
-    config_file, log_file = args.config, args.log
+    config_file, log_file, execute_flag = args.config, args.log, args.execute
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    log = FileLogger(filename=conf.log_file)
-    print(f"See logs in {conf.log_file} ...")
+    log = FileLogger(filename=log_file)
+    print(f"See logs in {log_file} ...")
     log.info(">>>>>>> TiDB DML Tool(by time) Start...")
 
     # create connection pool
@@ -313,7 +315,7 @@ if __name__ == '__main__':
     operator = SQLOperator(pool=pool, sql=conf.sql.strip().strip(";"), table=table, split_interval=conf.split_interval,
                            split_column_precision=conf.split_column_precision,
                            start_time=conf.start_time, end_time=conf.end_time, batch_size=conf.batch_size,
-                           max_workers=conf.max_workers, execute=conf.execute)
+                           max_workers=conf.max_workers, execute=execute_flag)
     operator.validate()
     operator.run()
 

@@ -34,7 +34,9 @@ SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by id).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="log file name, default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-e", dest="execute", action="store_true",
+                        help="execute or just print the first batch by default")
     args = parser.parse_args()
     return args
 
@@ -176,6 +178,7 @@ class SavePoint(object):
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
                  max_workers=None, start_rowid=None, end_rowid=None, savepoint: SavePoint = None, execute=None):
+        self.pool: MySQLConnectionPool = pool
         self.table: Table = table
         self.sql: str = sql
         self.table_alias = None
@@ -185,7 +188,6 @@ class SQLOperator(object):
         self.end_rowid = int(end_rowid) if end_rowid else self.table.rowid_max
         self.savepoint = savepoint
         self.execute = execute
-        self.pool: MySQLConnectionPool = pool
 
     def validate(self):
         log.info("Checking SQL ...")
@@ -289,11 +291,11 @@ class SQLOperator(object):
 
 if __name__ == '__main__':
     args = argParse()
-    config_file, log_file = args.config, args.log
+    config_file, log_file, execute_flag = args.config, args.log, args.execute
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    log = FileLogger(filename=conf.log_file)
-    print(f"See logs in {conf.log_file} ...")
+    log = FileLogger(filename=log_file)
+    print(f"See logs in {log_file} ...")
     log.info(">>>>>>> DML Tool(by id) Start...")
 
     # create connection pool
@@ -310,8 +312,9 @@ if __name__ == '__main__':
 
     # start sql operator
     operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size,
-                           execute=conf.execute, max_workers=conf.max_workers,
-                           start_rowid=conf.start_rowid, end_rowid=conf.end_rowid, savepoint=SavePoint(conf.savepoint))
+                           max_workers=conf.max_workers,
+                           start_rowid=conf.start_rowid, end_rowid=conf.end_rowid, savepoint=SavePoint(conf.savepoint),
+                           execute=execute_flag)
     operator.validate()
     operator.run()
 

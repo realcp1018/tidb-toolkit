@@ -15,14 +15,12 @@ class Config(object):
         # flashback config
         self.until_time, self.override = None, None
         # dml config
-        self.sql, self.execute, self.savepoint = None, None, None
+        self.sql, self.savepoint = None, None
         # by id
         self.start_rowid, self.end_rowid = None, None
         # by time
         self.split_column, self.split_column_precision, self.split_interval = None, None, None
         self.start_time, self.end_time = None, None
-        # log file
-        self.log_file = log_file
 
     def parse(self):
         with open(self.__config_file, encoding='utf8') as f:
@@ -41,7 +39,6 @@ class Config(object):
         self.override = config["flashback"].get("override", False)
         # dml config
         self.sql = config["dml"]["sql"]
-        self.execute = config["dml"].get("execute", False)
         self.savepoint = config["dml"].get("savepoint", None)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
@@ -55,12 +52,9 @@ class Config(object):
         self.split_column = config["dml"]["by_time"]["split_column"]
         self.split_column_precision = config["dml"]["by_time"].get("split_column_precision", 0)
         self.split_interval = config["dml"]["by_time"].get("split_interval", 3600)
-        # log_file
-        if not self.log_file:
-            self.log_file = f"{self.host}.log.{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
 
 if __name__ == '__main__':
     config = Config(config_file="tk.toml")
     config.parse()
-    print(config.savepoint, config.log_file)
+    print(config.savepoint)

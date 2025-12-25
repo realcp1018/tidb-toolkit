@@ -32,7 +32,9 @@ SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Chunk Update Script.")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="log file name, default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-e", dest="execute", action="store_true",
+                        help="execute or just print the first chunk by default")
     args = parser.parse_args()
     return args
 
@@ -335,11 +337,11 @@ class Executor(object):
 
 if __name__ == '__main__':
     args = argParse()
-    config_file, log_file = args.config, args.log
+    config_file, log_file, execute_flag = args.config, args.log, args.execute
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    log = FileLogger(filename=conf.log_file)
-    print(f"See logs in {conf.log_file} ...")
+    log = FileLogger(filename=log_file)
+    print(f"See logs in {log_file} ...")
     log.info(">>>>>>> Start Chunk Update ...")
 
     # create connection pool
@@ -362,7 +364,7 @@ if __name__ == '__main__':
 
     # run
     executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), chunk_size=conf.batch_size,
-                        max_workers=conf.max_workers, savepoint_file=conf.savepoint, execute=conf.execute)
+                        max_workers=conf.max_workers, savepoint_file=conf.savepoint, execute=execute_flag)
     start_time = datetime.now()
     executor.run()
     end_time = datetime.now()

@@ -24,7 +24,9 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 ```
 
 # Examples
+
 **1. Flashback table tb1kb_1** *[Deprecated]*
+
 ```
 # edit tidb.toml [basic] and [flashback] part
 ...
@@ -34,21 +36,23 @@ until_time = "2021-12-17 17:29:45"
 override = false
 ...
 # Run:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
+python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
+
 **2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)**
+
 ```
 # update tidb.toml's [basic], [dml] and [dml.by_id] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
-execute = false
 # Run:
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
-# execute = false: Do nothing except print the first batch's SQL 
-# make sure the result sql is correct, then set execute to true and rerun
+python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+# make sure the result sql is as expected, then set --execute and rerun
 ```
+
 **3. Execute "delete from where ..." on big table tb1kb_1(table sharded)**
+
 ```
 # update tidb.toml's [basic], [dml] and [dml.by_time] part
 db = "test"
@@ -60,23 +64,24 @@ split_column_precision = 3
 split_interval = 3600
 start_time = "2021-01-01 00:00:00"
 end_time = "2021-12-31 00:00:00"
-execute = false
 # Run:
-python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log
+python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
-**4. Execute "delete from where ..." on big table tb1kb_1(table sharded or not, just use chunk update)**
+
+**4. Execute "delete from where ..." on big table tb1kb_1(no matter table sharded or not, just use chunk update)**
+
 ```
 # update tidb.toml's [basic], [dml] and [dml.chunk_update] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
-execute = false
 # Run:
-python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log
-# execute = false
-# make sure the result sql is correct, then set execute to true and rerun
+python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+# make sure the result sql is correct, then set --execute and rerun
 ```
+
 **5. Show Store/Regions of a cluster**
+
 ```
 # Examples:
 python3 tk_pdctl.py -u <pd ip:port> -o showStores
@@ -110,7 +115,7 @@ tk_chunk_update is a better approach, you don't need to check if the table is sh
 But you may get a performance degradation when use tk_chunk_update on a table which has many empty regions.
 You'll see logs like:
 
-`ConnectionPool Monitor: Size 99`
+`ConnectionPool Monitor: Size xx`
 
 And:
 

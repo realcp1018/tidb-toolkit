@@ -30,19 +30,18 @@ until_time = "2021-12-17 17:29:45"
 override = false
 ...
 # 运行:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
+python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
+
 **2. 对大表执行 "delete from where ..." (表必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**
 ```
 # 编辑 tidb.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
-execute = false
 # 运行:
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log
-# execute = false: 设置此项表示不实际进行数据删除，仅打印一个拆分后的示例SQL，适用于比较谨慎的场景
-# 确保输出的拆分SQL符合预期，然后可以修改为true实际运行
+python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+# 确保输出的拆分SQL符合预期，然后可以--execute实际运行
 ```
 **3. 对大表执行 "delete from where ..." (表已设置auto_random或shard_rowid_bits，或者仅仅想根据时间列删除极少部分数据)**
 ```
@@ -56,9 +55,8 @@ split_column_precision = 3
 split_interval = 3600
 start_time = "2021-01-01 00:00:00"
 end_time = "2021-12-31 00:00:00"
-execute = false
 # 运行:
-python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log
+python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
 **4. 对大表执行 "delete from where ..." (通用脚本，无需考虑表是否设置auto_random或shard_rowid_bits)**
 ```
@@ -66,11 +64,9 @@ python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
-execute = false
 # 运行:
-python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log
-# execute = false
-# 确保输出的拆分SQL符合预期，然后可以修改为true实际运行
+python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+# 确保输出的拆分SQL符合预期，然后可以添加--execute实际运行
 ```
 **5. 展示集群 Store/Regions 信息**
 ```

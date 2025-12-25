@@ -20,7 +20,7 @@ from utils.logger import FileLogger
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Flashback Table Tool.")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="Log File Name, Default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, required=True, help="Log File Name")
     args = parser.parse_args()
     return args
 
@@ -193,8 +193,8 @@ if __name__ == '__main__':
     config_file, log_file = args.config, args.log
     conf = Config(config_file=config_file, log_file=log_file)
     conf.parse()
-    log = FileLogger(filename=conf.log_file)
-    print(f"See logs in {conf.log_file} ...")
+    log = FileLogger(filename=log_file)
+    print(f"See logs in {log_file} ...")
     try:
         log.info("----------------------------------------------------------------------------------------------")
         log.info("[Table `%s` Flashback]:" % conf.table)
