@@ -1,11 +1,11 @@
 # 简介
-**TiDB辅助工具集，用途包含：**
+**TiDB/MySQL辅助工具集，用途包含：**
 1. *在数亿、数十亿的表上高效的删除大量数据而避免触发tidb事务大小限制*
     * *by id (通过rowid`(主键数字id或内置的_tidb_rowid)`进行拆分,不支持auto_random或设置了shard_rowid_bits的表)*
     * *by time (通过 date/datetime/time-related numerical 等时间列/数字时间列进行拆分)*
     * **[新增]** *chunk update(通过rowid分进行动态定界和拆分，兼容auto_random或设置了shard_rowid_bits的表)* 
 2. *格式化打印tidb集群的 stores/regions/location-labels 信息, 以及一些核心的pd配置信息和警告，可以迅速厘清集群的region分布情况*
-3. *闪回整表至gc_safe_point之后的任意时间点* **[可用，但不推荐]**
+3. *闪回tidb整表至gc_safe_point之后的任意时间点* **[可用，但不推荐]**
 
 # Python环境
 ![py1](images/1.svg)
@@ -22,7 +22,7 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 # 全部示例：
 **1. 闪回表 tb1kb_1** *[可用，但不推荐]*
 ```
-# 编辑 tidb.toml 的[basic] 和 [flashback] 部分，其他部分的设置不影响本次运行
+# 编辑 tk.toml 的[basic] 和 [flashback] 部分，其他部分的设置不影响本次运行
 ...
 db = "test"
 table ="tb1kb_1"
@@ -35,7 +35,7 @@ python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 
 **2. 对大表执行 "delete from where ..." (表必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**
 ```
-# 编辑 tidb.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
+# 编辑 tk.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -45,7 +45,7 @@ python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
 **3. 对大表执行 "delete from where ..." (表已设置auto_random或shard_rowid_bits，或者仅仅想根据时间列删除极少部分数据)**
 ```
-# 编辑 tidb.toml 的 [basic], [dml] and [dml.by_time] 部分
+# 编辑 tk.toml 的 [basic], [dml] and [dml.by_time] 部分
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -60,7 +60,7 @@ python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 ```
 **4. 对大表执行 "delete from where ..." (通用脚本，无需考虑表是否设置auto_random或shard_rowid_bits)**
 ```
-# 编辑 tidb.toml 的 [basic], [dml] 和 [dml.chunk_update] 部分
+# 编辑 tk.toml 的 [basic], [dml] 和 [dml.chunk_update] 部分
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"

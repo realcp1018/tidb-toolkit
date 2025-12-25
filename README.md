@@ -1,15 +1,15 @@
 # Introduction
 - [简介: 简体中文](README_zh.md)
 
-**Toolkits is for TiDB.**
-1. *Run sql on a table which has billions of records, sql will be split into tasks/batches automatically.*
+**Toolkits is for TiDB/MySQL.**
+1. *Run sql on a mysql/tidb table which has billions of records, sql will be split into tasks/batches automatically.*
     * *by id (use primary-key id or internal _tidb_rowid)*
     * *by time (use a date/datetime/time-related numerical column)*
     * **[NEW]** *chunk update(split sql into chunks use rowid, regardless of auto_random or shard_rowid_bits)* 
 2. *Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data 
 distribution of your cluster.*
-3. *Print some core cluster configs and warnings*
-4. *Flashback the whole table to a time point larger than gc_safe_point.* **[Deprecated]**
+3. *Print some tidb core cluster configs and warnings*
+4. *Flashback the whole tidb table to a time point larger than gc_safe_point.* **[Deprecated]**
 
 # Python
 ![py1](images/1.svg)
@@ -28,7 +28,7 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 **1. Flashback table tb1kb_1** *[Deprecated]*
 
 ```
-# edit tidb.toml [basic] and [flashback] part
+# edit tk.toml [basic] and [flashback] part
 ...
 db = "test"
 table ="tb1kb_1"
@@ -42,7 +42,7 @@ python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 **2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)**
 
 ```
-# update tidb.toml's [basic], [dml] and [dml.by_id] part
+# update tk.toml's [basic], [dml] and [dml.by_id] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -54,7 +54,7 @@ python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 **3. Execute "delete from where ..." on big table tb1kb_1(table sharded)**
 
 ```
-# update tidb.toml's [basic], [dml] and [dml.by_time] part
+# update tk.toml's [basic], [dml] and [dml.by_time] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -71,7 +71,7 @@ python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 **4. Execute "delete from where ..." on big table tb1kb_1(no matter table sharded or not, just use chunk update)**
 
 ```
-# update tidb.toml's [basic], [dml] and [dml.chunk_update] part
+# update tk.toml's [basic], [dml] and [dml.chunk_update] part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
