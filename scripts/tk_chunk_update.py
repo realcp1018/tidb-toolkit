@@ -161,6 +161,10 @@ class SavePoint(object):
         with open(self.file_name, "w") as f:
             f.write(str(savepoint))
 
+    def delete(self):
+        if os.path.exists(self.file_name):
+            os.remove(self.file_name)
+
 
 # format and validate the input sql
 class Sql(object):
@@ -293,7 +297,7 @@ class Executor(object):
         self.sql_text = sql_text
         self.chunk_size = chunk_size
         self.max_workers = max_workers
-        self.savepoint = SavePoint(file_name=savepoint_file) if savepoint_file else None
+        self.savepoint = SavePoint(file_name=savepoint_file)
         self.execute = execute
 
     def run(self):
@@ -322,16 +326,14 @@ class Executor(object):
                     if len(futures) >= self.max_workers * 10:
                         for f in as_completed(futures):
                             futures.remove(f)
-                        if self.savepoint:
-                            log.info(
-                                f"write savepoint {chunk.start}, complete percent: {round(chunk.start * 100 / self.table.rowid_max, 2)}%")
-                            self.savepoint.set(chunk.start)
+                        log.info(
+                            f"write savepoint {chunk.start}, complete percent: {round(chunk.start * 100 / self.table.rowid_max, 2)}%")
+                        self.savepoint.set(chunk.start)
                     future = thread_pool.submit(chunk.execute, self.pool)
                     futures.add(future)
             # the `with` statement will wait for all futures done executing then shutdown
-            if self.savepoint:
-                log.info(f"write savepoint {self.table.rowid_max}, complete percent: 100%")
-                self.savepoint.set(self.table.rowid_max)
+            log.info(f"Complete percent: 100%, delete savepoint file {self.savepoint.file_name}")
+            self.savepoint.delete()
         self.pool.put(conn)
 
 

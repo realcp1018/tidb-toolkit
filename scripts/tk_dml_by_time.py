@@ -297,7 +297,7 @@ if __name__ == '__main__':
     conf.parse()
     log = FileLogger(filename=log_file)
     print(f"See logs in {log_file} ...")
-    log.info(">>>>>>> TiDB DML Tool(by time) Start...")
+    log.info(">>>>>>> DML Tool(by time) Start...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,
@@ -321,3 +321,4 @@ if __name__ == '__main__':
 
     # close connection pool
     pool.close()
+    log.info("<<<<<<< DML Tool(by time) Finished.")

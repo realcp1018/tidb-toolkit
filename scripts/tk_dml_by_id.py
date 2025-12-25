@@ -174,10 +174,14 @@ class SavePoint(object):
         with open(self.file_name, "w") as f:
             f.write(str(savepoint))
 
+    def delete(self):
+        if os.path.exists(self.file_name):
+            os.remove(self.file_name)
+
 
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql=None, batch_size=None,
-                 max_workers=None, start_rowid=None, end_rowid=None, savepoint: SavePoint = None, execute=None):
+                 max_workers=None, start_rowid=None, end_rowid=None, savepoint_file: str = None, execute=None):
         self.pool: MySQLConnectionPool = pool
         self.table: Table = table
         self.sql: str = sql
@@ -186,7 +190,7 @@ class SQLOperator(object):
         self.max_workers = max_workers
         self.start_rowid = int(start_rowid) if start_rowid else self.table.rowid_min
         self.end_rowid = int(end_rowid) if end_rowid else self.table.rowid_max
-        self.savepoint = savepoint
+        self.savepoint = SavePoint(file_name=savepoint_file)
         self.execute = execute
 
     def validate(self):
@@ -220,7 +224,10 @@ class SQLOperator(object):
         if len(where_token) == 0:
             raise Exception("No where condition in SQL(try where 1=1), exit...")
         # 4
-        self.start_rowid = max(self.savepoint.get(), self.start_rowid)
+        self.start_rowid = max(self.savepoint.get() + 1, self.start_rowid)
+        if self.start_rowid > self.end_rowid:
+            log.info("start_rowid larger than end_rowid, Nothing to Do, Exit...")
+            os._exit(0)
         # Done
         log.info("SQL Checked.")
 
@@ -246,6 +253,8 @@ class SQLOperator(object):
                                     thread_count)
                 i += 1000
                 self.savepoint.set(self.start_rowid + (i * self.batch_size))
+            log.info("All Batches Done, Remove Savepoint File.")
+            self.savepoint.delete()
 
     def __run_batch(self, start: int, stop: int, batch_id, max_batch_id):
         try:
@@ -312,12 +321,11 @@ if __name__ == '__main__':
 
     # start sql operator
     operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size,
-                           max_workers=conf.max_workers,
-                           start_rowid=conf.start_rowid, end_rowid=conf.end_rowid, savepoint=SavePoint(conf.savepoint),
-                           execute=execute_flag)
+                           max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
+                           savepoint_file=conf.savepoint, execute=execute_flag)
     operator.validate()
     operator.run()
 
     # close connection pool
     pool.close()
-    log.info("DML Tool(by id) Finished.")
+    log.info("<<<<<<< DML Tool(by id) Finished.")
