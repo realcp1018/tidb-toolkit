@@ -7,9 +7,9 @@ Usage:
         1.delete from <table> where <...>
         2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
-    _tidb_rowid will be used as the default split column.
+    numeric pk or _tidb_rowid（both of them is called rowid here） will be used as the default split column.
     If table was sharded(SHARD_ROW_ID_BITS or auto_random used), use tk_dml_bytime instead.
-    SQL will be split into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously
+    SQL will be split into multiple batches by rowid&batch_size(new sqls with between statement on rowid), there will be <max_workers> batches run simultaneously
 """
 import os
 import argparse
@@ -106,10 +106,21 @@ class Table(object):
         self.rowid = None
         self.rowid_min = None
         self.rowid_max = None
-        self.is_rowid_sharded = False
+
+    def is_from_tidb(self) -> bool:
+        """
+        check if table is from tidb
+        """
+        with self.conn.cursor() as cursor:
+            cursor.execute("select version();")
+            version = cursor.fetchone()[0]
+            if "TiDB" in version:
+                return True
+        return False
 
     def load(self):
         log.info(f"Loading Table Info of {self.db}.{self.name} ...")
+        is_tidb_table = self.is_from_tidb()
         with self.conn.cursor() as c:
             sql = f"select COLUMN_NAME,DATA_TYPE from information_schema.COLUMNS where table_schema='{self.db}' " \
                   f"and table_name='{self.name}' and COLUMN_KEY='PRI';"
@@ -118,23 +129,27 @@ class Table(object):
             if len(pri_info) == 1 and pri_info[0][1] in ('int', 'bigint'):
                 self.rowid = pri_info[0][0]
             else:
+                if not is_tidb_table:
+                    raise Exception("No numeric primary key in this non-TiDB table!")
                 self.rowid = "_tidb_rowid"  # use _tidb_rowid when no primary or primary is not int
-
-            sql = f"select TIDB_ROW_ID_SHARDING_INFO from information_schema.TABLES where TABLE_SCHEMA='{self.db}' " \
-                  f"and TABLE_NAME='{self.name}'"
-            try:
-                c.execute(sql)
-                rowid_shard_info = c.fetchone()[0]
-                if not rowid_shard_info.startswith("NOT_SHARDED"):
-                    self.is_rowid_sharded = True
-            except Exception as e:
-                if e.args[0] == 1054:
-                    print("Warning: TiDB version <=4.0.0, Please check if Rowid was sharded before execution!")
-                    pass
-                    # TIDB_ROW_ID_SHARDING_INFO not supported if tidb version <= 4.0，so print a warning here.
-                    # This warning told you to check table sharded info manually.
-                else:
-                    raise e
+            # if tidb table is sharded, exit directly
+            if is_tidb_table:
+                sql = f"select TIDB_ROW_ID_SHARDING_INFO from information_schema.TABLES where TABLE_SCHEMA='{self.db}' " \
+                      f"and TABLE_NAME='{self.name}'"
+                try:
+                    c.execute(sql)
+                    rowid_shard_info = c.fetchone()[0]
+                    if not rowid_shard_info.startswith("NOT_SHARDED"):
+                        raise Exception(f"Table {self.name} was set SHARD_ROW_ID_BITS or AUTO_RANDOM! exit...")
+                except Exception as e:
+                    if e.args[0] == 1054:
+                        print(
+                            "Warning: TiDB version <=4.0.0, Please check if Rowid was sharded manually before execution!")
+                        pass
+                        # TIDB_ROW_ID_SHARDING_INFO not supported if tidb version <= 4.0，so print a warning here.
+                        # This warning told you to check table sharded info manually.
+                    else:
+                        raise e
             sql = f"select min({self.rowid}),max({self.rowid}) from {self.db}.{self.name};"
             c.execute(sql)
             self.rowid_min, self.rowid_max = c.fetchone()
@@ -178,8 +193,7 @@ class SQLOperator(object):
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
         3.exit when no where conditions in sql && add tableRangeScan hint /*+ use_index(table_name) */
-        4.exit if table was sharded(SHARD_ROW_ID_BITS or auto_random)
-        5.set start_rowid to max of [start_rowid, savepoint]
+        4.set start_rowid to max of [start_rowid, savepoint]
         """
         # 1
         self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
@@ -204,11 +218,6 @@ class SQLOperator(object):
         if len(where_token) == 0:
             raise Exception("No where condition in SQL(try where 1=1), exit...")
         # 4
-        if self.table.is_rowid_sharded:
-            raise Exception(f"Table {self.table.name} was set SHARD_ROW_ID_BITS or AUTO_RANDOM! exit...")
-
-        log.info(f"Rowid [{self.table.rowid}] will be used for batching.")
-        # 5
         self.start_rowid = max(self.savepoint.get(), self.start_rowid)
         # Done
         log.info("SQL Checked.")
@@ -285,7 +294,7 @@ if __name__ == '__main__':
     conf.parse()
     log = FileLogger(filename=conf.log_file)
     print(f"See logs in {conf.log_file} ...")
-    log.info(">>>>>>> TiDB DML Tool(by id) Start...")
+    log.info(">>>>>>> DML Tool(by id) Start...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,
@@ -308,4 +317,4 @@ if __name__ == '__main__':
 
     # close connection pool
     pool.close()
-    log.info("TiDB DML Tool(by id) Finished.")
+    log.info("DML Tool(by id) Finished.")

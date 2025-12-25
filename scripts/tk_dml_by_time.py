@@ -25,6 +25,7 @@ from queue import Queue, Empty
 from threading import Thread
 from time import sleep
 from traceback import format_exc
+from typing import Union
 
 import pymysql
 import sqlparse
@@ -147,8 +148,8 @@ class SQLOperator(object):
         self.concat_table_name = None
         self.split_interval = int(split_interval) if split_interval else 86400
         self.split_column_precision = int(split_column_precision) if split_column_precision else 0
-        self.start_time = start_time
-        self.end_time = end_time
+        self.start_time: Union[str, float] = start_time
+        self.end_time: Union[str, float] = end_time
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.execute = execute
@@ -161,7 +162,7 @@ class SQLOperator(object):
         2.only SUPPORTED_SQL_TYPES are supported
         3.exit when no where condition
         4.check split_column data type,should be int/bigint/date/datetime
-            。if int/bigint, then start_time/end_time will be converted to unix timestamp
+            。if int/bigint, then start_time/end_time will be converted to unix timestamp(float)
             。if date/datetime/timestamp, then do nothing
             。if others, exit with error
         5.if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)

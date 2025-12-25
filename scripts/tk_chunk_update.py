@@ -7,8 +7,8 @@ Usage:
         1.delete from <table> where <...>
         2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
-    _tidb_rowid will be used as the default split column.
-    SQL will be split into multiple chunks by _tidb_rowid&chunk_size
+    numeric pk or _tidb_rowid（both of them is called rowid here） will be used as the default split column.
+    SQL will be split into multiple chunks by rowid&chunk_size
 """
 import os
 import argparse
@@ -110,6 +110,17 @@ class Table(object):
                 f"\ntable: [`{self.db}`.`{self.name}`]"
                 f"\nrowid: [`{self.rowid}`](min={self.rowid_min}, max={self.rowid_max})")
 
+    def is_from_tidb(self) -> bool:
+        """
+        check if table is from tidb
+        """
+        with self.conn.cursor() as cursor:
+            cursor.execute("select version();")
+            version = cursor.fetchone()[0]
+            if "TiDB" in version:
+                return True
+        return False
+
     def load(self) -> None:
         log.info(f"Loading Table Info of {self.db}.{self.name} ...")
         query = f"select column_name,data_type from information_schema.columns where table_schema='{self.db}' " \
@@ -121,6 +132,8 @@ class Table(object):
             if len(pk_info) == 1 and pk_info[0][1] in ('int', 'bigint'):
                 self.rowid = pk_info[0][0]
             else:
+                if not self.is_from_tidb():
+                    raise Exception("No numeric primary key in this non-TiDB table!")
                 self.rowid = "_tidb_rowid"
             query = f"select min({self.rowid}),max({self.rowid}) from {self.db}.{self.name};"
             cursor.execute(query)
