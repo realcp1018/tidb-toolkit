@@ -9,11 +9,10 @@ Usage:
         3.insert into <table_target> select <...> from <table> where <...>
     _tidb_rowid will be used as the default split column.
     If table was sharded(SHARD_ROW_ID_BITS or auto_random used), use tk_dml_bytime instead.
-    SQL will be splited into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously
+    SQL will be split into multiple batches by _tidb_rowid&batch_size(new sqls with between statement on _tidb_rowid), there will be <max_workers> batches run simultaneously
 """
 import os
 import argparse
-import signal
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from queue import Queue, Empty
@@ -171,10 +170,10 @@ class SQLOperator(object):
         self.end_rowid = int(end_rowid) if end_rowid else self.table.rowid_max
         self.savepoint = savepoint
         self.execute = execute
-        self.connction_pool: MySQLConnectionPool = pool
+        self.pool: MySQLConnectionPool = pool
 
     def validate(self):
-        log.info("Validating SQL Start...")
+        log.info("Checking SQL ...")
         """
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
@@ -212,7 +211,7 @@ class SQLOperator(object):
         # 5
         self.start_rowid = max(self.savepoint.get(), self.start_rowid)
         # Done
-        log.info("Validating SQL Done...")
+        log.info("SQL Checked.")
 
     def run(self):
         thread_count = (self.end_rowid - self.start_rowid) // self.batch_size + 1
@@ -251,13 +250,13 @@ class SQLOperator(object):
             sql_token_values = list(map(lambda token: token.value, sql_tokens))
             batch_sql = ' '.join(sql_token_values) + ")"
         except Exception as e:
-            log.error(f"Batch {batch_id} failed with exeception {e}, exit... Exception:\n {format_exc()}")
+            log.error(f"Batch {batch_id} failed with exception {e}, exit... Exception:\n {format_exc()}")
             raise
         if self.execute:
             retry = 0
             while retry < 3:
+                conn = self.pool.get()
                 try:
-                    conn = self.connction_pool.get()
                     start_time = datetime.now()
                     with conn.cursor() as c:
                         affected_rows = c.execute(batch_sql)
@@ -271,8 +270,7 @@ class SQLOperator(object):
                     log.error(f"SQL Retry {retry} Failed: {batch_sql}")
                     log.error(f"Batch {batch_id} of {max_batch_id} Failed: {e}, Exception:\n {format_exc()}")
                 finally:
-                    if 'conn' in locals():
-                        self.connction_pool.put(conn)
+                    self.pool.put(conn)
             if retry == 3:
                 log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
                 os._exit(1)
@@ -287,6 +285,7 @@ if __name__ == '__main__':
     conf.parse()
     log = FileLogger(filename=conf.log_file)
     print(f"See logs in {conf.log_file} ...")
+    log.info(">>>>>>> TiDB DML Tool(by id) Start...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,
@@ -301,11 +300,12 @@ if __name__ == '__main__':
     pool.put(conn)
 
     # start sql operator
-    operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size, execute=conf.execute,
-                           max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
-                           savepoint=SavePoint(conf.savepoint))
+    operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size,
+                           execute=conf.execute, max_workers=conf.max_workers,
+                           start_rowid=conf.start_rowid, end_rowid=conf.end_rowid, savepoint=SavePoint(conf.savepoint))
     operator.validate()
     operator.run()
 
     # close connection pool
     pool.close()
+    log.info("TiDB DML Tool(by id) Finished.")

@@ -8,18 +8,17 @@ Usage:
         2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
     _tidb_rowid will be used as the default split column.
-    SQL will be splited into multiple chunks by _tidb_rowid&chunk_size
+    SQL will be split into multiple chunks by _tidb_rowid&chunk_size
 """
 import os
 import argparse
-import signal
 from concurrent.futures import ThreadPoolExecutor, Future, as_completed
 from queue import Queue, Empty
 from threading import Thread
 from time import sleep
 from datetime import datetime, timedelta
-# from pprint import pprint
-from typing import Set
+from typing import Set, Optional
+
 import pymysql
 import sqlparse
 
@@ -49,7 +48,7 @@ class MySQLConnectionPool(object):
         self.pool: Queue = Queue(maxsize=self.pool_size)
 
     def init(self):
-        log.info(f"Initializing MySQL Connection Pool(size={self.pool_size})...")
+        log.info("Initializing MySQL Connection Pool...")
         for i in range(self.pool_size):
             try:
                 conn = pymysql.connect(host=self.host, port=self.port, user=self.user, password=self.password,
@@ -74,12 +73,11 @@ class MySQLConnectionPool(object):
                 log.info(f"Connection Pool close with Exception: {e}")
         log.info("Closing MySQL Connection Pool Finished...")
 
-    def get(self) -> pymysql.Connection:
+    def get(self):
         conn: pymysql.Connection = self.pool.get()
         try:
-            conn.ping(reconnect=True)
+            conn.ping()
         except Exception as e:
-            # reconnect=True so here only print the exception
             log.error(e)
         return conn
 
@@ -100,32 +98,34 @@ class MySQLConnectionPool(object):
 # collect table details from database
 class Table(object):
     def __init__(self, name: str, db: str, conn: pymysql.Connection):
-        self.name = name
-        self.db = db
-        self.conn = conn
-        self.rowid = None
-        self.rowid_min = None
-        self.rowid_max = None
+        self.name: str = name
+        self.db: str = db
+        self.conn: pymysql.Connection = conn
+        self.rowid: Optional[int] = None
+        self.rowid_min: Optional[int] = None
+        self.rowid_max: Optional[int] = None
 
     def __str__(self):
-        return f"table: `{self.db}`.`{self.name}`, rowid: `{self.rowid}`({self.rowid_min}, {self.rowid_max})"
+        return (f"Table Info =>"
+                f"\ntable: [`{self.db}`.`{self.name}`]"
+                f"\nrowid: [`{self.rowid}`](min={self.rowid_min}, max={self.rowid_max})")
 
     def load(self) -> None:
         log.info(f"Loading Table Info of {self.db}.{self.name} ...")
-        with self.conn.cursor() as c:
-            query = f"select column_name,data_type from information_schema.columns where table_schema='{self.db}' " \
-                    f"and table_name='{self.name}' and column_key='PRI';"
-            c.execute(query)
-            pk_info = c.fetchall()
+        query = f"select column_name,data_type from information_schema.columns where table_schema='{self.db}' " \
+                f"and table_name='{self.name}' and column_key='PRI';"
+        with self.conn.cursor() as cursor:
+            cursor.execute(query)
+            pk_info = cursor.fetchall()
             # set self.rowid
             if len(pk_info) == 1 and pk_info[0][1] in ('int', 'bigint'):
                 self.rowid = pk_info[0][0]
             else:
                 self.rowid = "_tidb_rowid"
             query = f"select min({self.rowid}),max({self.rowid}) from {self.db}.{self.name};"
-            c.execute(query)
+            cursor.execute(query)
             # set self.rowid extremum
-            self.rowid_min, self.rowid_max = c.fetchone()
+            self.rowid_min, self.rowid_max = cursor.fetchone()
         log.info(f"Load Table Info of {self.db}.{self.name} Done.")
 
 
@@ -152,10 +152,10 @@ class Sql(object):
     def __init__(self, text: str, table: Table):
         self.text: str = text
         self.table: Table = table
-        self.table_alias: str = None
+        self.table_alias: Optional[str] = None
 
     def validate(self):
-        log.info("Validating SQL Start...")
+        log.info("Checking SQL ...")
         """
         1.only SUPPORTED_SQL_TYPES are supported
         2.set table alias(to table.name if no alias) && add tableRangeScan hint /*+ use_index(table_name) */
@@ -181,6 +181,7 @@ class Sql(object):
         where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
         if len(where_token) == 0:
             raise Exception("No where condition in SQL(try with `WHERE 1=1`)")
+        log.info("SQL Checked.")
 
 
 # chunks that can be executed
@@ -198,22 +199,22 @@ class Chunk(object):
     def execute(self, pool: MySQLConnectionPool, retry_limit: int = 3):
         retry_time = 0
         while retry_time < retry_limit:
-            try:
-                conn = pool.get()
-                start_time = datetime.now()
-                with conn.cursor() as c:
-                    rows = c.execute(self.sql_text)
-                conn.commit()
-                end_time = datetime.now()
-                log.info(f"chunk {self.seq} Done [split_time={self.split_time}] [duration={end_time-start_time}] "
-                         f"[rows={rows}] [sql={self.sql_text}]")
-                break
-            except Exception as e:
-                log.error(f"chunk {self.seq} Retry Time {retry_time} Failed [error={e}]")
-                retry_time += 1
-                continue
-            finally:
-                if 'conn' in locals():
+            conn: pymysql.Connection = pool.get()
+            with conn.cursor() as cursor:
+                try:
+                    start_time = datetime.now()
+                    cursor.execute(query=self.sql_text)
+                    rows: int = cursor.rowcount
+                    conn.commit()
+                    end_time = datetime.now()
+                    log.info(f"chunk {self.seq} Done [split_time={self.split_time}] [duration={end_time - start_time}] "
+                             f"[rowsAffected={rows}] [sql={self.sql_text}]")
+                    break
+                except Exception as e:
+                    log.error(f"chunk {self.seq} Retry Time {retry_time} Failed [error={e}]")
+                    retry_time += 1
+                    continue
+                finally:
                     pool.put(conn)
         if retry_time == retry_limit:
             log.error(f"chunk {self.seq} Retry All {retry_limit} Times Failed, Exit Now [sql={self.sql_text}]")
@@ -222,58 +223,69 @@ class Chunk(object):
 
 # split Sql into multiple Chunks
 class ChunkSpliter(object):
-    def __init__(self, sql: Sql, table: Table, pool: MySQLConnectionPool, chunk_size: int = 1000):
-        self.sql = sql
-        self.table = table
-        self.pool = pool
-        self.chunk_size = chunk_size
+    def __init__(self, sql: Sql, table: Table, conn: pymysql.Connection, chunk_size: int):
+        self.sql: Sql = sql
+        self.table: Table = table
+        self.conn: pymysql.Connection = conn
+        self.chunk_size: int = chunk_size
 
     def split(self):
         current_seq = 1
         current_rowid = self.table.rowid_min
-        conn = self.pool.get()
-        while current_rowid < self.table.rowid_max:
-            start_time = datetime.now()
-            query = f"select max({self.table.rowid}) from (select {self.table.rowid} from {self.table.name}  where " \
-                    f"{self.table.rowid} > {current_rowid} order by {self.table.rowid} limit 0,{self.chunk_size}) t"
-            with conn.cursor() as c:
-                c.execute(query)
-                result = c.fetchone()
-                if len(result) == 0:
-                    return
-            end_time = datetime.now()
-            chunk_left = current_rowid
-            chunk_right = result[0]
+        if current_rowid == self.table.rowid_max:
+            log.info("Only one row to process ...")
+            chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` = {current_rowid})"
+            yield Chunk(seq=current_seq, split_time=timedelta(0), start=current_rowid, stop=current_rowid,
+                        sql_text=chunk_sql)
+            return None
+        if current_rowid > self.table.rowid_max:
+            log.info("No data to process, exit now.")
+            return None
+        with self.conn.cursor() as cursor:
+            while current_rowid < self.table.rowid_max:
+                start_time = datetime.now()
+                query = f"select max({self.table.rowid}) from (select {self.table.rowid} from {self.table.name}  where " \
+                        f"{self.table.rowid} > {current_rowid} order by {self.table.rowid} limit 0,{self.chunk_size}) t"
+                cursor.execute(query)
+                row = cursor.fetchone()
+                if len(row) == 0:
+                    return None
+                end_time = datetime.now()
+                chunk_left = current_rowid
+                chunk_right = row[0]
 
-            if chunk_right < self.table.rowid_max:
-                chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
-                            f"and `{self.sql.table_alias}`.`{self.table.rowid}` < {chunk_right})"
-                yield Chunk(seq=current_seq, split_time=end_time-start_time, start=chunk_left, stop=chunk_right, sql_text=chunk_sql)
-            else:
-                chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
-                            f"and `{self.sql.table_alias}`.`{self.table.rowid}` <= {self.table.rowid_max})"
-                self.pool.put(conn)
-                yield Chunk(seq=current_seq, split_time=end_time-start_time, start=chunk_left, stop=self.table.rowid_max, sql_text=chunk_sql)
+                if chunk_right < self.table.rowid_max:
+                    chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
+                                f"and `{self.sql.table_alias}`.`{self.table.rowid}` < {chunk_right})"
+                    yield Chunk(seq=current_seq, split_time=end_time - start_time, start=chunk_left, stop=chunk_right,
+                                sql_text=chunk_sql)
+                else:
+                    chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
+                                f"and `{self.sql.table_alias}`.`{self.table.rowid}` <= {self.table.rowid_max})"
+                    yield Chunk(seq=current_seq, split_time=end_time - start_time, start=chunk_left,
+                                stop=self.table.rowid_max, sql_text=chunk_sql)
 
-            current_seq += 1
-            current_rowid = chunk_right
+                current_seq += 1
+                current_rowid = chunk_right
+        return None
 
 
 class Executor(object):
     def __init__(self, pool: MySQLConnectionPool = None, table: Table = None, sql_text: str = None,
-                 chunk_size: int = 5000, max_workers: int = 50, savepoint_file: str = None, execute: bool = False):
+                 chunk_size: int = None, max_workers: int = None, savepoint_file: str = None, execute: bool = False):
+        self.pool: MySQLConnectionPool = pool
         self.table: Table = table
         self.sql_text = sql_text
         self.chunk_size = chunk_size
         self.max_workers = max_workers
         self.savepoint = SavePoint(file_name=savepoint_file) if savepoint_file else None
         self.execute = execute
-        self.pool: MySQLConnectionPool = pool
 
     def run(self):
         sql = Sql(text=self.sql_text, table=self.table)
         sql.validate()
-        chunk_spliter = ChunkSpliter(sql=sql, table=self.table, pool=self.pool, chunk_size=self.chunk_size)
+        conn: pymysql.Connection = pool.get()
+        chunk_spliter = ChunkSpliter(sql=sql, table=self.table, conn=conn, chunk_size=self.chunk_size)
         if not self.execute:
             for chunk in chunk_spliter.split():
                 log.info("will exit on the first chunk [execute=false]")
@@ -287,13 +299,17 @@ class Executor(object):
             3. another way is: remove one completed future and create a new one when len(futures) >= max_workers * 10,
             this way will be more efficient than the above, but it'll be difficult to write a savepoint
             """
+            if self.savepoint:
+                log.info(f"write initial savepoint {self.table.rowid_min - 1}")
+                self.savepoint.set(self.table.rowid_min - 1)
             with ThreadPoolExecutor(max_workers=self.max_workers) as thread_pool:
                 for chunk in chunk_spliter.split():
                     if len(futures) >= self.max_workers * 10:
                         for f in as_completed(futures):
                             futures.remove(f)
                         if self.savepoint:
-                            log.info(f"write savepoint {chunk.start}, complete percent: {round(chunk.start*100/self.table.rowid_max, 2)}%")
+                            log.info(
+                                f"write savepoint {chunk.start}, complete percent: {round(chunk.start * 100 / self.table.rowid_max, 2)}%")
                             self.savepoint.set(chunk.start)
                     future = thread_pool.submit(chunk.execute, self.pool)
                     futures.add(future)
@@ -301,6 +317,7 @@ class Executor(object):
             if self.savepoint:
                 log.info(f"write savepoint {self.table.rowid_max}, complete percent: 100%")
                 self.savepoint.set(self.table.rowid_max)
+        self.pool.put(conn)
 
 
 if __name__ == '__main__':
@@ -310,6 +327,7 @@ if __name__ == '__main__':
     conf.parse()
     log = FileLogger(filename=conf.log_file)
     print(f"See logs in {conf.log_file} ...")
+    log.info(">>>>>>> Start Chunk Update ...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,
@@ -323,13 +341,15 @@ if __name__ == '__main__':
     table.load()
     current_savepoint = SavePoint(file_name=conf.savepoint).get()
     if current_savepoint > table.rowid_min:
-        log.info(f"savepoint {current_savepoint} larger than min(rowid) {table.rowid_min}, use savepoint instead.")
-        table.rowid_min = current_savepoint
+        log.info(
+            f"savepoint {current_savepoint} in file {conf.savepoint} larger than min(rowid) {table.rowid_min}, use savepoint instead.")
+        table.rowid_min = current_savepoint + 1
     log.info(table)
     pool.put(conn)
 
     # run
-    executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), savepoint_file=conf.savepoint, execute=conf.execute)
+    executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), chunk_size=conf.batch_size,
+                        max_workers=conf.max_workers, savepoint_file=conf.savepoint, execute=conf.execute)
     start_time = datetime.now()
     executor.run()
     end_time = datetime.now()
@@ -337,3 +357,4 @@ if __name__ == '__main__':
 
     # close connection pool
     pool.close()
+    log.info("<<<<<<< Chunk Update Finished.")

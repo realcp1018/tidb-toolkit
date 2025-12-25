@@ -72,7 +72,7 @@ python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log
 # execute = false
 # 确保输出的拆分SQL符合预期，然后可以修改为true实际运行
 ```
-**5. 展示集群 Store/Reions 信息**
+**5. 展示集群 Store/Regions 信息**
 ```
 # 示例:
 python3 tk_pdctl.py -u <pd ip:port> -o showStores
@@ -126,7 +126,7 @@ select max(rowid) from
 然后Executor遍历split()生成的chunk，调用其execute方法并将其作为一个future放入ThreadPoolExecutor中(执行并发度为max_workers)。
 
 这个机制要求chunk的生成速度大于消费速度，否则会衰退为单线程执行，但是为了规避by_id的缺点又必须采用这种动态生成的方式，
-因此当你遇到此类性能衰退时, 请使用 tk_dml_by_id/tk_dml_by_time.
+因此当你遇到此类性能衰退时, 请使用 tk_dml_by_id/tk_dml_by_time或考虑增大batch_size.
 
 **2. 关于 tk_dml_byid.py 和 tk_dml_bytime.py:**
 

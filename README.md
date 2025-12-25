@@ -1,5 +1,4 @@
 # Introduction
-- [Introduction: English](README_en.md)
 - [简介: 简体中文](README_zh.md)
 
 **Toolkits is for TiDB.**
@@ -77,7 +76,7 @@ python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log
 # execute = false
 # make sure the result sql is correct, then set execute to true and rerun
 ```
-**5. Show Store/Reions of a cluster**
+**5. Show Store/Regions of a cluster**
 ```
 # Examples:
 python3 tk_pdctl.py -u <pd ip:port> -o showStores
@@ -105,7 +104,7 @@ StoreAddr                StoreID        State          LCt/RCt        LWt/RWt   
 ```
 
 # FAQ
-**1. When you want to delete/update/insert on a table, how to chose from tk_chunk_update And tk_dml_by_id/tk_dml_by_time?**
+**1. When you want to delete/update/insert on a table, how to choose from tk_chunk_update And tk_dml_by_id/tk_dml_by_time?**
 
 tk_chunk_update is a better approach, you don't need to check if the table is sharded or auto_random.
 But you may get a performance degradation when use tk_chunk_update on a table which has many empty regions.
@@ -117,9 +116,9 @@ And:
 
 `chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rows=1000] [sql=...]`
 
-where split_time > duration, that means the chunk produce speed is slow than consumption, so there's only 1 sql running at a time .
+where split_time > duration, that means the chunk produce speed is slower than consumption, so there's only 1 sql running at a time .
 
-And when you encounter a performance degradation, use tk_dml_by_id/tk_dml_by_time instead.
+And when you encounter a performance degradation, use tk_dml_by_id/tk_dml_by_time instead or increase batch_size.
 
 **2. About tk_dml_byid.py and tk_dml_bytime.py:**
 
@@ -132,10 +131,10 @@ Following sql types supported：
 By id:
 >* Built-in _tidb_rowid will be used as the default split column.
 >* If table was sharded(`SHARD_ROW_ID_BITS or auto_random used`), use tk_dml_bytime instead.
->* SQL will be splited into multiple batches by _tidb_rowid&batch_size(`new sqls with between statement on _tidb_rowid`), there will be <max_workers> batches run simultaneously.
+>* SQL will be split into multiple batches by _tidb_rowid&batch_size(`new sqls with between statement on _tidb_rowid`), there will be <max_workers> batches run simultaneously.
 
 By time:
->* SQL will be splitted into multiple tasks by split_column & split_interval(`new sqls with between statement on split column`).
+>* SQL will be split into multiple tasks by split_column & split_interval(`new sqls with between statement on split column`).
 >* Every task run batches serially, default batch size = 1000(`task sql will be suffixed by [limit 1000] and run multiple times until affected_rows=0`).
 >* There will be <max_workers> tasks run simultaneously.
 >* Run `grep Finished <log-name> | tail` to get how many tasks finished.
@@ -149,8 +148,8 @@ A promoted way compared with `tk_dml_byid.py` and `tk_dml_bytime.py` when you wa
 python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l <log-path>.log
 ```
 Chunk update:
->* SQL will be splitted into multiple chunks by rowid, just like by_id
->* by_id will process a lot of unused rowids because these rowid may not exits, while chunk_update use `order by rowid limit <chunk_size>` to produce chunks    
+>* SQL will be split into multiple chunks by rowid, just like by_id
+>* by_id will process a lot of unused rowids because these rowid may not exist, while chunk_update use `order by rowid limit <chunk_size>` to produce chunks    
 >* by_id can not process tables which shard_rowid_bits/auto_random was set, while chunk_update can be used with all tidb tables
 >* by_time still can be used when you just want to process the target time range, by_id and chunk_update will scan all the rowids
 

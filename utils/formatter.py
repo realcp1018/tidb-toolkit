@@ -4,14 +4,13 @@
 """
 column_definition={"Name": 10, "Age": 5, "Address": 64}: which means name's max len is 10, age's max len is 5 ...
 column_format will be: '%-10s%-5s%-64s'
-outpout:
+output:
 Name      Age  Address      --header_fields
 ----      ---  -------      --header_cutlines
 Cen       111  SH.CN        --record
 Lee       222  LA.USA       --record
 """
 from typing import Dict, Sequence
-from utils.color import Color
 
 
 class Formatter(object):

@@ -8,12 +8,12 @@ Usage:
         2.update <table> set <...> where <...>
         3.insert into <table_target> select <...> from <table> where <...>
     1.Make sure there's index on the split column.
-    2.Split column type should be int/bingint/date/datetime, if numerical, split_column_precision should also be specified.
+    2.Split column type should be int/bigint/date/datetime, if numerical, split_column_precision should also be specified.
     3.Make sure your sql has a where condition(even where 1=1)
 task/batch split points：
-    SQL will be splitted into multiple tasks by split_column & split_interval(new sqls with between statement on split column)
+    SQL will be split into multiple tasks by split_column & split_interval(new sqls with between statement on split column)
     Every task will run batches serially, default batch size is 1000(which means task sql will be suffixed by `limit 1000` and run multiple times until affected rows=0)
-    There will be <max_workers> taskes run simultaneously.
+    There will be <max_workers> tasks run simultaneously.
     Run `grep Finished <log-name> | tail` to find out how many tasks finished.
 """
 import os
@@ -40,7 +40,7 @@ SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by time).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, help="log lile name, default <host>.log.<now>")
+    parser.add_argument("-l", dest="log", type=str, help="log file name, default <host>.log.<now>")
     args = parser.parse_args()
     return args
 
@@ -152,10 +152,10 @@ class SQLOperator(object):
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.execute = execute
-        self.connction_pool: MySQLConnectionPool = pool
+        self.pool: MySQLConnectionPool = pool
 
     def validate(self):
-        log.info("Validating SQL Start...")
+        log.info("Checking SQL ...")
         """
         1.use sqlparse.format to format sql
         2.only SUPPORTED_SQL_TYPES are supported
@@ -187,7 +187,7 @@ class SQLOperator(object):
         # 4 & 5
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
-                datetime.fromtimestamp(self.table.split_column_max/(10**self.split_column_precision))
+                datetime.fromtimestamp(self.table.split_column_max / (10 ** self.split_column_precision))
             except OSError as e:  # for windows
                 if e.args[0] == 22:
                     raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
@@ -198,9 +198,9 @@ class SQLOperator(object):
                 raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
                                 "split_column_precision(3 or 6, default 0)!")
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
-                        10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
+                    10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
-                        10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
+                    10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
         elif self.table.split_column_datatype in ("date", "datetime", "timestamp"):
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S") if self.start_time else \
                 self.table.split_column_min
@@ -210,7 +210,7 @@ class SQLOperator(object):
         else:
             raise Exception("Unsupported split column Data type: {self.table.split_column_datatype}!")
         # Done
-        log.info("Validating SQL Done...")
+        log.info("SQL Checked.")
 
     def run(self):
         log.info(f"Time Range [{self.start_time},{self.end_time}]")
@@ -258,8 +258,8 @@ class SQLOperator(object):
         if self.execute:
             retry = 0
             while retry < 3:
+                conn = self.pool.get()
                 try:
-                    conn = self.connction_pool.get()
                     affected_rows = 1
                     task_start = datetime.now()
                     while affected_rows > 0:
@@ -273,13 +273,13 @@ class SQLOperator(object):
                     if affected_rows == 0:
                         task_end = datetime.now()
                         log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
-                    self.connction_pool.put(conn)
                     break
                 except Exception as e:
                     retry += 1
                     log.error(f"SQL Retry {retry} Failed: {batch_sql}")
                     log.error(f"Task Execute Failed On [{start},{stop}): {e}, Exception:\n{format_exc()}")
-                    self.connction_pool.put(conn)
+                finally:
+                    self.pool.put(conn)
             if retry == 3:
                 log.error(f"SQL Retry {retry} Times Failed, Exit Now: {batch_sql}")
                 os.kill(os.getpid(), signal.SIGINT)
@@ -294,6 +294,7 @@ if __name__ == '__main__':
     conf.parse()
     log = FileLogger(filename=conf.log_file)
     print(f"See logs in {conf.log_file} ...")
+    log.info(">>>>>>> TiDB DML Tool(by time) Start...")
 
     # create connection pool
     pool = MySQLConnectionPool(host=conf.host, port=int(conf.port), user=conf.user, password=conf.password,

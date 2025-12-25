@@ -42,7 +42,7 @@ ALL_SUPPORT_ACTIONS = {
     "removeStorePeers":
         "remove all the region peers on a specific <store-id>",
 }
-# TODO:
+# todo:
 #  safeRemoveRegionPeer, safeRemoveStorePeers: remove peer/peers when len(Region peers on Up stores after removed)>=2
 
 # set Logger and Color
@@ -52,11 +52,14 @@ color = Color()
 
 # arg parse
 def argParse():
-    parser = argparse.ArgumentParser(description="pd http api store/region info formatter.", formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description="pd http api store/region info formatter.",
+                                     formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("-u", metavar="<ip:addr>", dest="url", required=True, type=str,
                         help="pd addr, format ip:port, for example 127.0.0.1:2379")
-    parser.add_argument("-o", metavar="<option>", dest="option", choices=ALL_SUPPORT_ACTIONS.keys(), default="showStores",
-                        help="store/region options, default `showStores`, Options: \n%s" % "\n".join([k+":\n\t"+v for k, v in ALL_SUPPORT_ACTIONS.items()]))
+    parser.add_argument("-o", metavar="<option>", dest="option", choices=ALL_SUPPORT_ACTIONS.keys(),
+                        default="showStores",
+                        help="store/region options, default `showStores`, Options: \n%s" % "\n".join(
+                            [k + ":\n\t" + v for k, v in ALL_SUPPORT_ACTIONS.items()]))
     parser.add_argument("-s", metavar="<store-id>", dest="storeID", type=int,
                         help="store id")
     parser.add_argument("-r", metavar="<region-id>", dest="regionID", type=int,
@@ -94,9 +97,9 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Error: Store ID should be specified!")
             exit(1)
-        pdconfig = PDConfig.from_api(self.__url)
+        pdConfig = PDConfig.from_api(self.__url)
         stores = Store.from_api_all(pd_addr=self.__url, all_state=True)
-        pdconfig.print_core_configs()
+        pdConfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in stores:
             if store.store_id == self.__storeID:
@@ -106,16 +109,16 @@ class OptionHandler(object):
                                                      store.space_used_ratio, store.start_ts,
                                                      [{l.get('key'): l.get('value')} for l in store.labels])
                                                     )
-                pdconfig.print_warn_configs()
+                pdConfig.print_warn_configs()
                 return
         print("Error: Store ID %d not exist!" % self.__storeID)
         exit(1)
 
     # for all stores
     def showStores(self):
-        pdconfig = PDConfig.from_api(self.__url)
+        pdConfig = PDConfig.from_api(self.__url)
         stores = Store.from_api_all(pd_addr=self.__url, all_state=True)
-        pdconfig.print_core_configs()
+        pdConfig.print_core_configs()
         self.__store_formatter.print_header()
         for store in sorted(stores, key=lambda s: s.address):
             self.__store_formatter.print_record((store.address, store.store_id, store.state_name,
@@ -123,18 +126,18 @@ class OptionHandler(object):
                                                  "%s/%s" % (store.leader_weight, store.region_weight),
                                                  store.space_used_ratio, store.start_ts,
                                                  [{l.get('key'): l.get('value')} for l in store.labels]))
-        pdconfig.print_warn_configs()
+        pdConfig.print_warn_configs()
 
     # for single region
     def showRegion(self):
         if not self.__regionID:
             print("Error: Region ID should be specified!")
             exit(1)
-        region: Region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
+        region: Region = Region.from_api_regionId(pd_addr=self.__url, region_id=self.__regionID)
         self.__region_formatter.print_header()
         storeList: List[int] = [p["store_id"] for p in region.peers]
         leader: int = region.leader.get("store_id") if region.leader else None
-        leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
+        leaderAddr: str = Store.from_api_storeId(pd_addr=self.__url, store_id=leader).address if leader else None
         if region.down_peers:
             downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
         else:
@@ -153,7 +156,7 @@ class OptionHandler(object):
         for region in regions:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader.get("store_id") if region.leader else None
-            leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
+            leaderAddr: str = Store.from_api_storeId(pd_addr=self.__url, store_id=leader).address if leader else None
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -175,7 +178,7 @@ class OptionHandler(object):
             if len(region.peers) == n:
                 storeList = [p["store_id"] for p in region.peers]
                 leader = region.leader.get("store_id") if region.leader else None
-                leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url,
+                leaderAddr: str = Store.from_api_storeId(pd_addr=self.__url,
                                                          store_id=leader).address if leader else None
                 if region.down_peers:
                     downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
@@ -200,7 +203,7 @@ class OptionHandler(object):
             if not region.leader:
                 storeList = [p["store_id"] for p in region.peers]
                 leader = region.leader.get("store_id") if region.leader else None
-                leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url,
+                leaderAddr: str = Store.from_api_storeId(pd_addr=self.__url,
                                                          store_id=leader).address if leader else None
                 if region.down_peers:
                     downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
@@ -221,12 +224,12 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Error: Store ID should be specified!")
             exit(1)
-        regions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
+        regions = Region.from_api_storeId(pd_addr=self.__url, store_id=self.__storeID)
         self.__region_formatter.print_header()
         for region in regions[:self.__limit]:
             storeList = [p["store_id"] for p in region.peers]
             leader = region.leader.get("store_id") if region.leader else None
-            leaderAddr: str = Store.from_api_storeid(pd_addr=self.__url, store_id=leader).address if leader else None
+            leaderAddr: str = Store.from_api_storeId(pd_addr=self.__url, store_id=leader).address if leader else None
             if region.down_peers:
                 downPeersStoreID = [p["peer"]["store_id"] for p in region.down_peers]
             else:
@@ -243,7 +246,7 @@ class OptionHandler(object):
         if not self.__storeID or not self.__regionID:
             print("Error: Both Store ID and Region ID should be specified!")
             exit(1)
-        region = Region.from_api_regionid(pd_addr=self.__url, region_id=self.__regionID)
+        region = Region.from_api_regionId(pd_addr=self.__url, region_id=self.__regionID)
         isSuccess, respText = region.remove_peer(pd_addr=self.__url, store_id=self.__storeID)
         if isSuccess:
             logger.info("Operator remove-peer created for region %d's peer on store %d[1/1]." % (self.__regionID,
@@ -255,7 +258,7 @@ class OptionHandler(object):
         if not self.__storeID:
             print("Store ID should be specified!")
             exit(1)
-        storeRegions = Region.from_api_storeid(pd_addr=self.__url, store_id=self.__storeID)
+        storeRegions = Region.from_api_storeId(pd_addr=self.__url, store_id=self.__storeID)
         i = 0
         region_count = len(storeRegions)
         while i < region_count:
@@ -345,7 +348,8 @@ class PDConfig(object):
 
     def print_core_configs(self):
         print("PD Core Configs:")
-        print(">> Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels, self.strictly_match_label))
+        print(
+            ">> Location-Label Rules: [{0}] (force match: {1})".format(self.location_labels, self.strictly_match_label))
         print(">> Space-Ratio Settings: [{0}, {1}]".format(self.high_space_ratio, self.low_space_ratio))
 
     def print_warn_configs(self):
@@ -459,7 +463,7 @@ class Store(object):
         return all_stores
 
     @classmethod
-    def from_api_storeid(cls, pd_addr, store_id):
+    def from_api_storeId(cls, pd_addr, store_id):
         store_proto = Store()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/store/%d" % (pd_url, store_id), headers={"content-type": "application/json"})
@@ -546,7 +550,7 @@ class Region(object):
         return all_regions
 
     @classmethod
-    def from_api_regionid(cls, pd_addr, region_id):
+    def from_api_regionId(cls, pd_addr, region_id):
         region_proto = Region()
         pd_url = "http://%s/pd/api/v1" % pd_addr
         resp = requests.get("%s/region/id/%d" % (pd_url, region_id), headers={"content-type": "application/json"})
@@ -568,7 +572,7 @@ class Region(object):
         return cls(**cls_kwargs)
 
     @classmethod
-    def from_api_storeid(cls, pd_addr, store_id):
+    def from_api_storeId(cls, pd_addr, store_id):
         region_proto = Region()
         all_regions = list()
         pd_url = "http://%s/pd/api/v1" % pd_addr

@@ -6,29 +6,24 @@ user = "root"
 password = "root"
 db = "test"
 table = "test"
-## batch size for a single thread，default 1000
-batch_size = 1000
-## concurrent running database connections, default 50
-max_workers = 50
+## batch size for a single thread，default 5000
+batch_size = 5000
+## concurrent running database connections, default 20
+max_workers = 20
 
 [flashback]
-## required，format example: "2020-01-01 00:00:00",should be later than tikv_gc_safe_point
+## required for flashback，format example: "2020-01-01 00:00:00",should be later than tikv_gc_safe_point
 until_time = "2020-01-01 00:00:00"
 ## true/false, overide original table or not after flashback, default false
 override = false
 
 [dml]
-## required, only one sql a time
+## required for dml, only one sql a time
 sql = ""
 ## true/false，execute or not(default: print the first batched sql and stop running, safe mode)
 execute = false
-## savepoint filename, default ${host}.savepoint, only used by chunk_update and by_id
+## savepoint filename, default {host}_{port}.savepoint, only used by chunk_update and by_id
 # savepoint = "your savepoint file name"
-
-[dml.chunk_update]
-## records count in a chunk, default 1000
-chunk_size = 1000
-
 
 [dml.by_id]
 ## min _tidb_rowid when split sql, default min(_tidb_rowid)
@@ -37,7 +32,7 @@ chunk_size = 1000
 # end_rowid = 0
 
 [dml.by_time]
-## required, table field used for splitting, should be int/bigint/data/datetime
+## required for dml by_time, table field used for splitting, should be int/bigint/data/datetime
 split_column = ""
 ## time precision when split_column is numerical, default 0(0->s, 3->ms, 6->μs)
 split_column_precision = 0

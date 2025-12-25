@@ -4,7 +4,7 @@
 """
 Usage:
     table will be restored to `_<table_name>_YYYYMMDDHH24MISS`
-    if override is true，the original table will be overrided by the new table.
+    if override is true，the original table will be override by the new table.
 """
 import sys
 import pymysql
@@ -65,8 +65,8 @@ class FlashBackOperator(object):
         mysql_conn.close()
         tikv_gc_safe_point = datetime.strptime(tikv_gc_safe_point, '%Y%m%d-%H:%M:%S')
         if self.until_time <= tikv_gc_safe_point:
-            log.info("Specifed until_time(%s) is before tikv_gc_safe_point(%s), exit..." % (self.until_time,
-                                                                                            tikv_gc_safe_point))
+            log.info("Specified until_time(%s) is before tikv_gc_safe_point(%s), exit..." % (self.until_time,
+                                                                                             tikv_gc_safe_point))
             sys.exit(1)
         else:
             # set tikv_gc_life_time to 720h
@@ -146,9 +146,9 @@ class FlashBackOperator(object):
     def flashback_table(self):
         self.create_new_table()
         rowid_column, max_rowid = self.get_rowid_info()
-        log.info("Flashbacking table `%s`(%d rows estimated]) to `%s`..." % (self.table,
-                                                                             max_rowid if max_rowid else 0,
-                                                                             self.new_table))
+        log.info("Flashback table `%s`(%d rows estimated]) to `%s`..." % (self.table,
+                                                                          max_rowid if max_rowid else 0,
+                                                                          self.new_table))
         try:
             max_thread_count = max_rowid // self.batch_size + 1 if max_rowid else 0
             log.info("[MAX_THREAD_COUNT: %d]" % max_thread_count)
@@ -163,7 +163,7 @@ class FlashBackOperator(object):
                 i += 200
         except Exception as e:
             log.error(e)
-            log.info("\tFlashbacking table `%s` failed, exit..." % self.table)
+            log.info("\tFlashback table `%s` failed, exit..." % self.table)
             sys.exit(1)
 
     def check_override(self):
@@ -179,8 +179,8 @@ class FlashBackOperator(object):
             mysql_conn.close()
             end_time = datetime.now()
             self.elapsed_time = end_time - self.start_time
-            log.info("\tFlashback table `%s` Done.%s(Elapsed Time: %s)%s" % (self.table, Color.font.yellow,
-                                                                             self.elapsed_time, Color.display.default))
+            log.info("\tFlashback table `%s` Done.%s(Elapsed Time: %s)%s" % (self.table, Color.Font.yellow,
+                                                                             self.elapsed_time, Color.Display.default))
         else:
             end_time = datetime.now()
             self.elapsed_time = end_time - self.start_time

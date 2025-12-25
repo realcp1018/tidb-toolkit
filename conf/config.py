@@ -16,8 +16,6 @@ class Config(object):
         self.until_time, self.override = None, None
         # dml config
         self.sql, self.execute, self.savepoint = None, None, None
-        # chunk update
-        self.chunk_size = None
         # by id
         self.start_rowid, self.end_rowid = None, None
         # by time
@@ -36,8 +34,8 @@ class Config(object):
         self.password = config["basic"]["password"]
         self.db = config["basic"]["db"]
         self.table = config["basic"]["table"]
-        self.max_workers = config["basic"].get("max_workers", 50)
-        self.batch_size = config["basic"].get("batch_size", 1000)
+        self.max_workers = config["basic"].get("max_workers", 20)
+        self.batch_size = config["basic"].get("batch_size", 5000)
         # flashback config
         self.until_time = config["flashback"]["until_time"]
         self.override = config["flashback"].get("override", False)
@@ -45,14 +43,12 @@ class Config(object):
         self.sql = config["dml"]["sql"]
         self.execute = config["dml"].get("execute", False)
         self.savepoint = config["dml"].get("savepoint", None)
-        # chunk update
-        self.chunk_size = config["dml"]["chunk_update"].get("chunk_size", 5000)
         # by id
         self.start_rowid = config["dml"]["by_id"].get("start_rowid", None)
         self.end_rowid = config["dml"]["by_id"].get("end_rowid", None)
         self.savepoint = config["dml"].get("savepoint", None)
         if not self.savepoint:
-            self.savepoint = f"{self.host}.savepoint"
+            self.savepoint = f"{self.host}_{self.port}.savepoint"
         # by time
         self.start_time = config["dml"]["by_time"].get("start_time", None)
         self.end_time = config["dml"]["by_time"].get("end_time", None)
@@ -65,6 +61,6 @@ class Config(object):
 
 
 if __name__ == '__main__':
-    config = Config(config_file="tidb.toml")
+    config = Config(config_file="tk.toml")
     config.parse()
     print(config.savepoint, config.log_file)
