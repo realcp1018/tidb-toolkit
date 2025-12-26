@@ -1,6 +1,6 @@
 # 简介
 **TiDB/MySQL辅助工具集，用途包含：**
-1. *在数亿、数十亿的表上高效的删除大量数据而避免触发tidb事务大小限制*
+1. *在数亿、数十亿的表上高效的删除/更新大量数据而避免触发tidb事务大小限制以及避免超大事务卡死*
     * *by id (通过rowid`(主键数字id或内置的_tidb_rowid)`进行拆分,不支持auto_random或设置了shard_rowid_bits的表)*
     * *by time (通过 date/datetime/time-related numerical 等时间列/数字时间列进行拆分)*
     * **[新增]** *chunk update(通过rowid分进行动态定界和拆分，兼容auto_random或设置了shard_rowid_bits的表)* 

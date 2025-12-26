@@ -1,4 +1,4 @@
 PyMySQL==1.0.2
 requests==2.25.1
-sqlparse~=0.4.1
+sqlparse==0.5.5
 toml==0.10.2
