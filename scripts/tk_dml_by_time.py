@@ -290,7 +290,7 @@ class SQLOperator(object):
                                  f"({batch_end_time - batch_start_time}).\nSQL: {batch_sql}")
                     if affected_rows == 0:
                         task_end = datetime.now()
-                        log.info(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
+                        print(f"Task On [{start},{stop}) Finished,({task_end - task_start}).\nSQL: {task_sql}")
                     break
                 except Exception as e:
                     retry += 1
