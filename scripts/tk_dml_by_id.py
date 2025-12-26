@@ -245,16 +245,16 @@ class SQLOperator(object):
         else:
             print(f"write initial savepoint {self.start_rowid - 1}")
             self.savepoint.set(self.start_rowid - 1)
-            i = 0  # release concurrent.futures every 1000 threads
+            i = 0  # release concurrent.futures every 100 threads
             while i < thread_count:
                 with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-                    for j in range(i, i + 1000):
+                    for j in range(i, i + 100):
                         pool.submit(self.__run_batch,
                                     self.start_rowid + (j * self.batch_size),
                                     self.start_rowid + ((j + 1) * self.batch_size),
                                     j + 1,
                                     thread_count)
-                i += 1000
+                i += 100
                 sp = self.start_rowid + (i * self.batch_size)
                 print(f"write savepoint {sp}, complete percent: {round(sp * 100 / self.table.rowid_max, 2)}%")
                 self.savepoint.set(sp)
