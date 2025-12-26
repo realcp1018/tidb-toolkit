@@ -141,7 +141,7 @@ class Table(object):
             c.execute(sql)
             self.split_column_datatype = c.fetchone()[0]
 
-            sql = f"select count(1) from information_schema.TIDB_INDEXES where TABLE_SCHEMA='{self.db}' " \
+            sql = f"select count(1) from information_schema.STATISTICS where TABLE_SCHEMA='{self.db}' " \
                   f"and TABLE_NAME='{self.name}' and COLUMN_NAME='{self.split_column}' and SEQ_IN_INDEX=1"
             c.execute(sql)
             r = c.fetchone()[0]
