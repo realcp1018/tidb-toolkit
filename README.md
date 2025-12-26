@@ -3,16 +3,16 @@
 
 **Toolkits is for TiDB/MySQL.**
 1. *Run sql on a mysql/tidb table which has billions of records, sql will be split into tasks/batches automatically.*
+    * *chunk update(split sql into chunks use rowid, regardless of auto_random or shard_rowid_bits)* 
     * *by id (use primary-key id or internal _tidb_rowid)*
     * *by time (use a date/datetime/time-related numerical column)*
-    * **[NEW]** *chunk update(split sql into chunks use rowid, regardless of auto_random or shard_rowid_bits)* 
 2. *Pretty print the stores/regions/labels of a tidb cluster, which gives you a clearer understood about the data 
 distribution of your cluster.*
 3. *Print some tidb core cluster configs and warnings*
 4. *Flashback the whole tidb table to a time point larger than gc_safe_point.* **[Deprecated]**
 
 # Python
-![py1](images/1.svg)
+![py](images/py3.7.svg)
 
 #### Requirements 
 *Run "python3 -m pip install -r requirements.txt" for dependencies.*
@@ -24,22 +24,14 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 ```
 
 # Examples
-
-**1. Flashback table tb1kb_1** *[Deprecated]*
-
+Following sql types supported：
 ```
-# edit tk.toml [basic] and [flashback] part
-...
-db = "test"
-table ="tb1kb_1"
-until_time = "2021-12-17 17:29:45"
-override = false
-...
-# Run:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
+1.delete from <table> where <...>
+2.update <table> set <...> where <...>
+3.insert into <target_table> select <...> from <source_table> where <...>
 ```
 
-**2. Execute "delete from where ..." on big table tb1kb_1(table not sharded)**
+**1. Use [tk_chunk_update.py](scripts/tk_chunk_update.py) to execute "delete from where ..." on mysql/tidb table**
 
 ```
 # update tk.toml's [basic], [dml] and [dml.by_id] part
@@ -47,11 +39,11 @@ db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
 # Run:
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_dml_byid.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 # make sure the result sql is as expected, then set --execute and rerun
 ```
 
-**3. Execute "delete from where ..." on big table tb1kb_1(table sharded)**
+**2. Use [tk_dml_by_id.py](scripts/tk_dml_by_id.py) to execute "delete from where ..." on mysql/tidb table(table must not be sharded)**
 
 ```
 # update tk.toml's [basic], [dml] and [dml.by_time] part
@@ -65,10 +57,10 @@ split_interval = 3600
 start_time = "2021-01-01 00:00:00"
 end_time = "2021-12-31 00:00:00"
 # Run:
-python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_dml_by_time.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 ```
 
-**4. Execute "delete from where ..." on big table tb1kb_1(no matter table sharded or not, just use chunk update)**
+**3. Use [tk_dml_by_time.py](scripts/tk_dml_by_time.py) to execute "delete from where ..." on mysql/tidb table**
 
 ```
 # update tk.toml's [basic], [dml] and [dml.chunk_update] part
@@ -76,11 +68,11 @@ db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
 # Run:
-python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_chunk_update.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 # make sure the result sql is correct, then set --execute and rerun
 ```
 
-**5. Show Store/Regions of a cluster**
+**4. Show Store/Regions of a cluster(for tidb only, config file not needed)**
 
 ```
 # Examples:
@@ -119,20 +111,13 @@ You'll see logs like:
 
 And:
 
-`chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rows=1000] [sql=...]`
+`chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rowsAffected=1000] [sql=...]`
 
 where split_time > duration, that means the chunk produce speed is slower than consumption, so there's only 1 sql running at a time .
 
 And when you encounter a performance degradation, use tk_dml_by_id/tk_dml_by_time instead or increase batch_size.
 
 **2. About tk_dml_byid.py and tk_dml_bytime.py:**
-
-Following sql types supported：
-```
-1.delete from <table> where <...>
-2.update <table> set <...> where <...>
-3.insert into <target_table> select <...> from <source_table> where <...>
-```
 By id:
 >* Built-in _tidb_rowid will be used as the default split column.
 >* If table was sharded(`SHARD_ROW_ID_BITS or auto_random used`), use tk_dml_bytime instead.
@@ -154,13 +139,9 @@ python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l <log-path>.log
 ```
 Chunk update:
 >* SQL will be split into multiple chunks by rowid, just like by_id
->* by_id will process a lot of unused rowids because these rowid may not exist, while chunk_update use `order by rowid limit <chunk_size>` to produce chunks    
+>* by_id will process a lot of unused rowids because these rowid may not exist, while chunk_update use `order by rowid limit <chunk_size>` to produce chunks
 >* by_id can not process tables which shard_rowid_bits/auto_random was set, while chunk_update can be used with all tidb tables
 >* by_time still can be used when you just want to process the target time range, by_id and chunk_update will scan all the rowids
-
-See complete percentage with:
-
-`tailf <log-file>|grep "write savepoint"`
 
 **4. About savepoint**
 
@@ -169,3 +150,5 @@ If process failed or stopped, just rerun it and the savepoint will be used as st
 
 tk_dml_by_time.py will **not** write savepoint on running. If process failed or stopped you can set a new 
 start_time in tidb.toml
+
+savepoint file will be deleted if script finished successfully.

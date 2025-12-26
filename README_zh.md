@@ -1,14 +1,14 @@
 # 简介
 **TiDB/MySQL辅助工具集，用途包含：**
 1. *在数亿、数十亿的表上高效的删除/更新大量数据而避免触发tidb事务大小限制以及避免超大事务卡死*
-    * *by id (通过rowid`(主键数字id或内置的_tidb_rowid)`进行拆分,不支持auto_random或设置了shard_rowid_bits的表)*
-    * *by time (通过 date/datetime/time-related numerical 等时间列/数字时间列进行拆分)*
-    * **[新增]** *chunk update(通过rowid分进行动态定界和拆分，兼容auto_random或设置了shard_rowid_bits的表)* 
+   * *chunk update 通过rowid`(主键数字id或tidb内置的_tidb_rowid)`进行动态定界和拆分，兼容auto_random或设置了shard_rowid_bits的表)* 
+   * *by id 通过rowid`(主键数字id或tidb内置的_tidb_rowid)`进行拆分,不支持auto_random或设置了shard_rowid_bits的表)*
+   * *by time 通过 date/datetime/timestamp/unixtime 等时间列/数字时间列进行拆分*
 2. *格式化打印tidb集群的 stores/regions/location-labels 信息, 以及一些核心的pd配置信息和警告，可以迅速厘清集群的region分布情况*
-3. *闪回tidb整表至gc_safe_point之后的任意时间点* **[可用，但不推荐]**
+3. *闪回tidb整表至gc_safe_point之后的任意时间点* **[已废弃]**
 
 # Python环境
-![py1](images/1.svg)
+![py](images/py3.7.svg)
 
 #### 环境要求 
 *运行 "python3 -m pip install -r requirements.txt" 安装python3库依赖.*
@@ -20,45 +20,14 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 ```
 
 # 全部示例：
-**1. 闪回表 tb1kb_1** *[可用，但不推荐]*
+此类工具支持以下几种SQL类型：
 ```
-# 编辑 tk.toml 的[basic] 和 [flashback] 部分，其他部分的设置不影响本次运行
-...
-db = "test"
-table ="tb1kb_1"
-until_time = "2021-12-17 17:29:45"
-override = false
-...
-# 运行:
-python3 scripts/tk_flashback.py -f conf/tidb.toml -l tb1kb_1.log
+1.delete from <table> where <...>
+2.update <table> set <...> where <...>
+3.insert into <target_table> select <...> from <source_table> where <...>
 ```
 
-**2. 对大表执行 "delete from where ..." (表必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**
-```
-# 编辑 tk.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
-db = "test"
-table = "tb1kb_1"
-sql = "delete from tb1kb_1 where is_active=0;"
-# 运行:
-python3 scripts/tk_dml_byid.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
-# 确保输出的拆分SQL符合预期，然后可以--execute实际运行
-```
-**3. 对大表执行 "delete from where ..." (表已设置auto_random或shard_rowid_bits，或者仅仅想根据时间列删除极少部分数据)**
-```
-# 编辑 tk.toml 的 [basic], [dml] and [dml.by_time] 部分
-db = "test"
-table = "tb1kb_1"
-sql = "delete from tb1kb_1 where is_active=0;"
-# 假设 create_time 类型为 int(时间精度为ms)
-split_column = "create_time"
-split_column_precision = 3
-split_interval = 3600
-start_time = "2021-01-01 00:00:00"
-end_time = "2021-12-31 00:00:00"
-# 运行:
-python3 scripts/tk_dml_by_time.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
-```
-**4. 对大表执行 "delete from where ..." (通用脚本，无需考虑表是否设置auto_random或shard_rowid_bits)**
+**1. 使用[tk_chunk_update.py](scripts/tk_chunk_update.py)执行 "delete from where ..." (mysql/tidb通用，且无需关注主键是否设置了auto_random或shard_rowid_bits)**
 ```
 # 编辑 tk.toml 的 [basic], [dml] 和 [dml.chunk_update] 部分
 db = "test"
@@ -68,7 +37,34 @@ sql = "delete from tb1kb_1 where is_active=0;"
 python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
 # 确保输出的拆分SQL符合预期，然后可以添加--execute实际运行
 ```
-**5. 展示集群 Store/Regions 信息**
+
+**2. 使用[tk_dml_by_id.py](scripts/tk_dml_by_id.py)执行"delete from where ..." (mysql/tidb通用，必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**
+```
+# 编辑 tk.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
+db = "test"
+table = "tb1kb_1"
+sql = "delete from tb1kb_1 where is_active=0;"
+# 运行:
+python3 scripts/tk_dml_byid.py -f conf/tk.toml -l tb1kb_1.log [--execute]
+# 确保输出的拆分SQL符合预期，然后可以--execute实际运行
+```
+**3. 使用[tk_dml_by_time.py](scripts/tk_dml_by_time.py)执行 "delete from where ..." (mysql/tidb通用，指定的时间字段上必须有索引)**
+```
+# 编辑 tk.toml 的 [basic], [dml] and [dml.by_time] 部分
+db = "test"
+table = "tb1kb_1"
+sql = "delete from tb1kb_1 where is_active=0;"
+# 假设 create_time 类型为 int类型的、时间精度为ms的unixtime
+split_column = "create_time"
+split_column_precision = 3
+split_interval = 3600
+start_time = "2021-01-01 00:00:00"
+end_time = "2021-12-31 00:00:00"
+# 运行:
+python3 scripts/tk_dml_by_time.py -f conf/tk.toml -l tb1kb_1.log [--execute]
+```
+
+**4. 展示集群 Store/Regions 信息(仅限tidb使用，无需配置文件)**
 ```
 # 示例:
 python3 tk_pdctl.py -u <pd ip:port> -o showStores
@@ -104,11 +100,11 @@ tk_chunk_update是最通用的，相比tk_dml_by_id可以避免大量无效rowid
 
 但是如果表包含大量空region，那么使用tk_chunk_update可能遭遇性能衰退的窘境，此时在执行日志中你会看到如下情况：
 
-`ConnectionPool Monitor: Size 99`
+`ConnectionPool Monitor: Size xx`
 
 以及:
 
-`chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rows=1000] [sql=...]`
+`chunk xxx Done [split_time=0:00:00.523525] [duration=0:00:00.229860] [rowsAffected=1000] [sql=...]`
 
 可以看到 split_time 大于 duration,这意味着chunk的生产速度慢于消费速度, 而tk_chunk_update的核心之一是就是需要保证chunk的生产速度远大于消费速度。
 
@@ -122,16 +118,11 @@ select max(rowid) from
 然后Executor遍历split()生成的chunk，调用其execute方法并将其作为一个future放入ThreadPoolExecutor中(执行并发度为max_workers)。
 
 这个机制要求chunk的生成速度大于消费速度，否则会衰退为单线程执行，但是为了规避by_id的缺点又必须采用这种动态生成的方式，
-因此当你遇到此类性能衰退时, 请使用 tk_dml_by_id/tk_dml_by_time或考虑增大batch_size.
+
+**因此当你遇到此类性能衰退时, 请使用 tk_dml_by_id/tk_dml_by_time或考虑增大batch_size.**
 
 **2. 关于 tk_dml_byid.py 和 tk_dml_bytime.py:**
 
-此类工具支持以下几种SQL类型：
-```
-1.delete from <table> where <...>
-2.update <table> set <...> where <...>
-3.insert into <target_table> select <...> from <source_table> where <...>
-```
 By id:
 >* 默认使用rowid作为拆分列(如官网所示，数字类型主键就是rowid，其他情况有一个内置的_tidb_rowid作为rowid)
 >* 如果表设置了(`SHARD_ROW_ID_BITS 或 auto_random used`), 那么建议使用 tk_dml_bytime 或 tk_chunk_update.
@@ -142,14 +133,11 @@ By time:
 >* 执行方式与by id略有不同，因为按时间列拆分后的task内部可能包含的记录数扔超出事务限制，因此实际上在task内部会以batch_size为单位顺序执行同一条分页SQL直到影响行数为0
 >* 通过 `grep Finished <log-name> | tail` 可以看到有多少task已完成
 
-**3. 关于 tk_chunk_update.py:**
-
-通过如下命令可以查看当前任务的执行进度：
-
-`tailf <log-file>|grep "write savepoint"`
-
-**4. 关于 savepoint**
+**3. 关于 savepoint**
 
 tk_dml_by_id.py 和 tk_chunk_update.py 在执行过程中会生产检查点，检查点表示在这之前已经处理完毕的rowid，
 无论是异常退出还是主动终止，再次运行时如果检查点文件存在则会跳过已处理的rowid.
+
 tk_dml_by_time.py 则 **不会** 产生检查点，如果任务失败建议查看执行日志手动设置一个start_time。
+
+脚本执行成功后会自动删除检查点文件。
