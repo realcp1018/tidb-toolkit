@@ -29,7 +29,7 @@ export PYTHONPATH=$PYTHONPATH:/data/tidb-toolkit
 
 **1. 使用[tk_chunk_update.py](scripts/tk_chunk_update.py)执行 "delete from where ..." (mysql/tidb通用，且无需关注主键是否设置了auto_random或shard_rowid_bits)**
 ```
-# 编辑 tk.toml 的 [basic], [dml] 和 [dml.chunk_update] 部分
+# 编辑 tk.toml 的 [basic] 和 [dml] 部分
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -40,7 +40,7 @@ python3 scripts/tk_chunk_update.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 
 **2. 使用[tk_dml_by_id.py](scripts/tk_dml_by_id.py)执行"delete from where ..." (mysql/tidb通用，必须未设置auto_random或shard_rowid_bits，如果误在此类表上运行也没事，只是效率极底)**
 ```
-# 编辑 tk.toml 的 [basic], [dml] 和 [dml.by_id] 部分，其他部分的设置不影响本次运行
+# 编辑 tk.toml 的 [basic], [dml] 和 [dml.by_id](可选) 部分，其他部分的设置不影响本次运行
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"

@@ -34,7 +34,20 @@ Following sql types supported：
 **1. Use [tk_chunk_update.py](scripts/tk_chunk_update.py) to execute "delete from where ..." on mysql/tidb table**
 
 ```
-# update tk.toml's [basic], [dml] and [dml.by_id] part
+# update tk.toml's [basic] and [dml] part
+db = "test"
+table = "tb1kb_1"
+sql = "delete from tb1kb_1 where is_active=0;"
+# Run:
+python3 scripts/tk_chunk_update.py -f conf/tk.toml -l tb1kb_1.log [--execute]
+# make sure the result sql is correct, then set --execute and rerun
+```
+
+
+**2. Use [tk_dml_by_id.py](scripts/tk_dml_by_id.py) to execute "delete from where ..." on mysql/tidb table(table must not be sharded)**
+
+```
+# update tk.toml's [basic], [dml] and [dml.by_id](optional) part
 db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
@@ -43,7 +56,7 @@ python3 scripts/tk_dml_byid.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 # make sure the result sql is as expected, then set --execute and rerun
 ```
 
-**2. Use [tk_dml_by_id.py](scripts/tk_dml_by_id.py) to execute "delete from where ..." on mysql/tidb table(table must not be sharded)**
+**3. Use [tk_dml_by_time.py](scripts/tk_dml_by_time.py) to execute "delete from where ..." on mysql/tidb table**
 
 ```
 # update tk.toml's [basic], [dml] and [dml.by_time] part
@@ -58,18 +71,6 @@ start_time = "2021-01-01 00:00:00"
 end_time = "2021-12-31 00:00:00"
 # Run:
 python3 scripts/tk_dml_by_time.py -f conf/tk.toml -l tb1kb_1.log [--execute]
-```
-
-**3. Use [tk_dml_by_time.py](scripts/tk_dml_by_time.py) to execute "delete from where ..." on mysql/tidb table**
-
-```
-# update tk.toml's [basic], [dml] and [dml.chunk_update] part
-db = "test"
-table = "tb1kb_1"
-sql = "delete from tb1kb_1 where is_active=0;"
-# Run:
-python3 scripts/tk_chunk_update.py -f conf/tk.toml -l tb1kb_1.log [--execute]
-# make sure the result sql is correct, then set --execute and rerun
 ```
 
 **4. Show Store/Regions of a cluster(for tidb only, config file not needed)**
@@ -134,7 +135,7 @@ By time:
 
 A promoted way compared with `tk_dml_byid.py` and `tk_dml_bytime.py` when you want to do dml on a large table.
 ```
-# update tk.toml's [basic] [dml] and [dml.chunk_update] part
+# update tk.toml's [basic] and [dml] part
 # Run:
 python3 scripts/tk_chunk_update.py -f conf/tk.toml -l <log-path>.log
 ```
