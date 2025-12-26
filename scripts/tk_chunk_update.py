@@ -76,11 +76,26 @@ class MySQLConnectionPool(object):
         log.info("Closing MySQL Connection Pool Finished...")
 
     def get(self):
-        conn: pymysql.Connection = self.pool.get()
+        conn = self.pool.get()
         try:
-            conn.ping()
+            # Validate the connection without triggering an automatic reconnect
+            conn.ping(reconnect=False)
         except Exception as e:
             log.error(e)
+            try:
+                conn.close()
+            except Exception as close_err:
+                log.error(f"Error closing dead MySQL connection: {close_err}")
+            # Create a new connection to replace the dead one
+            conn = pymysql.connect(
+                host=self.host,
+                port=self.port,
+                user=self.user,
+                password=self.password,
+                database=self.db,
+                charset="utf8mb4"
+            )
+            conn.autocommit(True)
         return conn
 
     def put(self, conn: pymysql.Connection):
