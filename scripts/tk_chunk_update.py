@@ -318,21 +318,20 @@ class Executor(object):
             3. another way is: remove one completed future and create a new one when len(futures) >= max_workers * 10,
             this way will be more efficient than the above, but it'll be difficult to write a savepoint
             """
-            if self.savepoint:
-                log.info(f"write initial savepoint {self.table.rowid_min - 1}")
-                self.savepoint.set(self.table.rowid_min - 1)
+            print(f"write initial savepoint {self.table.rowid_min - 1}")
+            self.savepoint.set(self.table.rowid_min - 1)
             with ThreadPoolExecutor(max_workers=self.max_workers) as thread_pool:
                 for chunk in chunk_spliter.split():
                     if len(futures) >= self.max_workers * 10:
                         for f in as_completed(futures):
                             futures.remove(f)
-                        log.info(
+                        print(
                             f"write savepoint {chunk.start}, complete percent: {round(chunk.start * 100 / self.table.rowid_max, 2)}%")
                         self.savepoint.set(chunk.start)
                     future = thread_pool.submit(chunk.execute, self.pool)
                     futures.add(future)
             # the `with` statement will wait for all futures done executing then shutdown
-            log.info(f"Complete percent: 100%, delete savepoint file {self.savepoint.file_name}")
+            print(f"Complete percent: 100%, delete savepoint file {self.savepoint.file_name}")
             self.savepoint.delete()
         self.pool.put(conn)
 
@@ -356,9 +355,10 @@ if __name__ == '__main__':
     conn = pool.get()
     table = Table(name=conf.table, db=conf.db, conn=conn)
     table.load()
+    print("Using savepoint file:", conf.savepoint)
     current_savepoint = SavePoint(file_name=conf.savepoint).get()
     if current_savepoint > table.rowid_min:
-        log.info(
+        print(
             f"savepoint {current_savepoint} in file {conf.savepoint} larger than min(rowid) {table.rowid_min}, use savepoint instead.")
         table.rowid_min = current_savepoint + 1
     log.info(table)
