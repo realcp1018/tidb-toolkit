@@ -118,6 +118,7 @@ where split_time > duration, that means the chunk produce speed is slower than c
 And when you encounter a performance degradation, use tk_dml_by_id/tk_dml_by_time instead or increase batch_size.
 
 **2. About tk_dml_byid.py and tk_dml_bytime.py:**
+
 By id:
 >* Built-in _tidb_rowid will be used as the default split column.
 >* If table was sharded(`SHARD_ROW_ID_BITS or auto_random used`), use tk_dml_bytime instead.
