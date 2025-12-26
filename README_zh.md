@@ -34,7 +34,7 @@ db = "test"
 table = "tb1kb_1"
 sql = "delete from tb1kb_1 where is_active=0;"
 # 运行:
-python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l tb1kb_1.log [--execute]
+python3 scripts/tk_chunk_update.py -f conf/tk.toml -l tb1kb_1.log [--execute]
 # 确保输出的拆分SQL符合预期，然后可以添加--execute实际运行
 ```
 

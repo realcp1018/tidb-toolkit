@@ -134,9 +134,9 @@ By time:
 
 A promoted way compared with `tk_dml_byid.py` and `tk_dml_bytime.py` when you want to do dml on a large table.
 ```
-# update tidb.toml's [basic] [dml] and [dml.chunk_update] part
+# update tk.toml's [basic] [dml] and [dml.chunk_update] part
 # Run:
-python3 scripts/tk_chunk_update.py -f conf/tidb.toml -l <log-path>.log
+python3 scripts/tk_chunk_update.py -f conf/tk.toml -l <log-path>.log
 ```
 Chunk update:
 >* SQL will be split into multiple chunks by rowid, just like by_id
@@ -149,7 +149,6 @@ Chunk update:
 tk_dml_by_id.py and tk_chunk_update.py will write savepoint on running.
 If process failed or stopped, just rerun it and the savepoint will be used as start rowid
 
-tk_dml_by_time.py will **not** write savepoint on running. If process failed or stopped you can set a new 
-start_time in tidb.toml
+tk_dml_by_time.py will **not** write savepoint on running. If process failed or stopped you can set a new start_time in tk.toml
 
 savepoint file will be deleted if script finished successfully.
