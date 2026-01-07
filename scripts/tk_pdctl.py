@@ -7,10 +7,10 @@ get store/region info from pd http api and pretty print result
 import argparse
 import json
 import requests
-from utils.bytesize import ByteSize
-from utils.logger import StreamLogger
-from utils.formatter import Formatter
-from utils.color import Color
+from tk_utils.bytesize import ByteSize
+from tk_utils.logger import StreamLogger
+from tk_utils.formatter import Formatter
+from tk_utils.color import Color
 from time import sleep
 from pprint import pprint
 from typing import List

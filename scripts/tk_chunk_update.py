@@ -22,7 +22,7 @@ from typing import Set, Optional
 import pymysql
 import sqlparse
 
-from utils.logger import FileLogger
+from tk_utils.logger import FileLogger
 from conf.config import Config
 
 # Global Constants

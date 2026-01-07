@@ -31,7 +31,7 @@ import pymysql
 import sqlparse
 import sqlparse.tokens as T
 
-from utils.logger import FileLogger
+from tk_utils.logger import FileLogger
 from conf.config import Config
 
 # Const

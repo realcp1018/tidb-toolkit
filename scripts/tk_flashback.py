@@ -12,9 +12,9 @@ import threading
 import argparse
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
-from utils.color import Color
+from tk_utils.color import Color
 from conf.config import Config
-from utils.logger import FileLogger
+from tk_utils.logger import FileLogger
 
 
 def argParse():
