@@ -27,12 +27,13 @@ from conf.config import Config
 
 # Global Constants
 SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
+UNSUPPORTED_KEYWORDS = ["LIMIT"]
 
 
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Chunk Update Script.")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-l", "--log", dest="log", type=str, required=True, help="log file name")
     parser.add_argument("-e", "--execute", dest="execute", action="store_true",
                         help="execute or just print the first chunk by default")
     args = parser.parse_args()
@@ -189,32 +190,48 @@ class Sql(object):
         self.table_alias: Optional[str] = None
 
     def validate(self):
+        """
+        1. only SUPPORTED_SQL_TYPES are supported
+        2. exit when no where condition
+        3. exit when have unsupported keywords
+        4. set table alias to table.name if no alias && add tableRangeScan hint /*+ use_index(table_alias) */ for tidb
+        5. wrap where condition with parentheses
+        """
         log.info("Checking SQL ...")
-        """
-        1.only SUPPORTED_SQL_TYPES are supported
-        2.set table alias(to table.name if no alias) && add tableRangeScan hint /*+ use_index(table_name) */
-        3.exit when no where condition
-        """
         self.text = sqlparse.format(self.text, use_space_around_operators=True, keyword_case="upper")
         # 1
         parsed_sql = sqlparse.parse(self.text)[0]
         sql_type = parsed_sql.get_type()
         if sql_type not in SUPPORTED_SQL_TYPES:
             raise Exception(f"Unsupported SQL type: {sql_type}!")
-        # 2
+
         sql_tokens: sqlparse.sql.TokenList = parsed_sql.tokens
+        # 2
+        where_tokens = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
+        if len(where_tokens) == 0:
+            raise Exception("No where condition in SQL(try with `WHERE 1=1`)")
+        # 3
         for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
+            if token.ttype == sqlparse.tokens.Keyword and token.value in UNSUPPORTED_KEYWORDS:
+                raise Exception(f"Unsupported keyword `{token.value}` in SQL!")
+        # 4
+        for token in sql_tokens:
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name:
                 self.table_alias = token.get_alias() if token.get_alias() else self.table.name
                 break
+        # if no table_alias found, it means table specified in config file might not exist in sql
+        if not self.table_alias:
+            raise Exception(f"Table `{self.table.name}` specified in config file not found in sql, please check!")
         for token in sql_tokens:
             if token.ttype == sqlparse.tokens.Keyword and token.value == "FROM":
-                self.text = self.text.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
+                self.text = self.text.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM", 1)
                 break
-        # 3
-        where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
-        if len(where_token) == 0:
-            raise Exception("No where condition in SQL(try with `WHERE 1=1`)")
+        # 5
+        where_token = where_tokens[0]
+        where_str = str(where_token)
+        new_where = f"WHERE ({where_str[5:]} ) "
+        self.text = self.text.replace(where_str, new_where, 1)
+
         log.info("SQL Checked.")
 
 
@@ -268,7 +285,7 @@ class ChunkSpliter(object):
         current_rowid = self.table.rowid_min
         if current_rowid == self.table.rowid_max:
             log.info("Only one row to process ...")
-            chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` = {current_rowid})"
+            chunk_sql = f"{self.sql.text} AND ( `{self.sql.table_alias}`.`{self.table.rowid}` = {current_rowid}) "
             yield Chunk(seq=current_seq, split_time=timedelta(0), start=current_rowid, stop=current_rowid,
                         sql_text=chunk_sql)
             return None
@@ -289,13 +306,13 @@ class ChunkSpliter(object):
                 chunk_right = row[0]
 
                 if chunk_right < self.table.rowid_max:
-                    chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
-                                f"and `{self.sql.table_alias}`.`{self.table.rowid}` < {chunk_right})"
+                    chunk_sql = f"{self.sql.text} AND ( `{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
+                                f"AND `{self.sql.table_alias}`.`{self.table.rowid}` < {chunk_right} )"
                     yield Chunk(seq=current_seq, split_time=end_time - start_time, start=chunk_left, stop=chunk_right,
                                 sql_text=chunk_sql)
                 else:
-                    chunk_sql = f"{self.sql.text} and (`{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
-                                f"and `{self.sql.table_alias}`.`{self.table.rowid}` <= {self.table.rowid_max})"
+                    chunk_sql = f"{self.sql.text} AND ( `{self.sql.table_alias}`.`{self.table.rowid}` >= {chunk_left} " \
+                                f"AND `{self.sql.table_alias}`.`{self.table.rowid}` <= {self.table.rowid_max} )"
                     yield Chunk(seq=current_seq, split_time=end_time - start_time, start=chunk_left,
                                 stop=self.table.rowid_max, sql_text=chunk_sql)
 
@@ -366,27 +383,30 @@ if __name__ == '__main__':
     pool.init()
     pool.start_monitor()
 
-    # load table info
-    conn = pool.get()
-    table = Table(name=conf.table, db=conf.db, conn=conn)
-    table.load()
-    print("Using savepoint file:", conf.savepoint)
-    current_savepoint = SavePoint(file_name=conf.savepoint).get()
-    if current_savepoint > table.rowid_min:
-        print(
-            f"savepoint {current_savepoint} in file {conf.savepoint} larger than min(rowid) {table.rowid_min}, use savepoint instead.")
-        table.rowid_min = current_savepoint + 1
-    log.info(table)
-    pool.put(conn)
-
-    # run
-    executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), chunk_size=conf.batch_size,
-                        max_workers=conf.max_workers, savepoint_file=conf.savepoint, execute=execute_flag)
-    start_time = datetime.now()
-    executor.run()
-    end_time = datetime.now()
-    log.info(f"total elapsed time: {end_time - start_time}")
-
-    # close connection pool
-    pool.close()
+    try:
+        # load table info
+        conn = pool.get()
+        table = Table(name=conf.table, db=conf.db, conn=conn)
+        table.load()
+        print("Using savepoint file:", conf.savepoint)
+        current_savepoint = SavePoint(file_name=conf.savepoint).get()
+        if current_savepoint > table.rowid_min:
+            print(f"savepoint {current_savepoint} in file {conf.savepoint} larger than min(rowid) {table.rowid_min}, "
+                  f"use savepoint+1 as new min(rowid)")
+            table.rowid_min = current_savepoint + 1
+        log.info(table)
+        pool.put(conn)
+        # run Executor
+        executor = Executor(pool=pool, table=table, sql_text=conf.sql.strip().strip(";"), chunk_size=conf.batch_size,
+                            max_workers=conf.max_workers, savepoint_file=conf.savepoint, execute=execute_flag)
+        start_time = datetime.now()
+        executor.run()
+        end_time = datetime.now()
+        log.info(f"total elapsed time: {end_time - start_time}")
+    except Exception as e:
+        log.critical(f"<<<<<<< Chunk Update Failed! Exception: {e}")
+        raise e
+    finally:
+        # close connection pool
+        pool.close()
     log.info("<<<<<<< Chunk Update Finished.")

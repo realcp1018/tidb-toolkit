@@ -29,12 +29,13 @@ from conf.config import Config
 
 # Global Constants
 SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
+UNSUPPORTED_KEYWORDS = ["LIMIT"]
 
 
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by id).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-l", "--log", dest="log", type=str, required=True, help="log file name")
     parser.add_argument("-e", "--execute", dest="execute", action="store_true",
                         help="execute or just print the first batch by default")
     args = parser.parse_args()
@@ -209,42 +210,54 @@ class SQLOperator(object):
         self.execute = execute
 
     def validate(self):
+        """
+        1. only SUPPORTED_SQL_TYPES are supported
+        2. exit when no where condition
+        3. exit when have unsupported keywords
+        4. set table alias to table.name if no alias && add tableRangeScan hint /*+ use_index(table_alias) */ for tidb
+        5. wrap where condition with parentheses
+        6. set start_rowid to max of [start_rowid, savepoint]
+        """
         log.info("Checking SQL ...")
-        """
-        1.use sqlparse.format to format sql
-        2.only SUPPORTED_SQL_TYPES are supported
-        3.exit when no where conditions in sql && add tableRangeScan hint /*+ use_index(table_name) */
-        4.set start_rowid to max of [start_rowid, savepoint]
-        """
-        # 1
-        self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
-                                   keyword_case="upper")
+        self.sql = sqlparse.format(self.sql, use_space_around_operators=True, keyword_case="upper")
         log.info(f"SQL will be batched: \n{self.sql}")
-        # 2
         parsed_sql = sqlparse.parse(self.sql)[0]
+        # 1
         sql_type = parsed_sql.get_type()
         if sql_type not in SUPPORTED_SQL_TYPES:
             raise Exception(f"Unsupported SQL type: {sql_type}!")
+
+        sql_tokens: sqlparse.sql.TokenList = parsed_sql.tokens
+        # 2
+        where_tokens = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
+        if len(where_tokens) == 0:
+            raise Exception("No where condition in SQL(try where 1=1), exit...")
         # 3
-        sql_tokens = parsed_sql.tokens
         for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
+            if token.ttype == sqlparse.tokens.Keyword and token.value in UNSUPPORTED_KEYWORDS:
+                raise Exception(f"Unsupported keyword `{token.value}` in SQL!")
+        # 4
+        for token in sql_tokens:
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name:
                 self.table_alias = token.get_alias() if token.get_alias() else self.table.name
                 break
+        # if no table_alias found, it means table specified in config file might not exist in sql
+        if not self.table_alias:
+            raise Exception(f"Table `{self.table.name}` specified in config file not found in sql, please check!")
         for token in sql_tokens:
             if token.ttype == sqlparse.tokens.Keyword and token.value == "FROM":
                 self.sql = self.sql.replace("FROM", f"/*+ USE_INDEX({self.table_alias}) */ FROM")
                 break
-        where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
-        if len(where_token) == 0:
-            raise Exception("No where condition in SQL(try where 1=1), exit...")
-        # 4
+        # 5
+        where_token = where_tokens[0]
+        where_str = str(where_token)
+        new_where = f"WHERE ({where_str[5:]} ) "
+        self.sql = self.sql.replace(where_str, new_where, 1)
+        # 6
         print("Using savepoint file:", self.savepoint.file_name)
         self.start_rowid = max(self.savepoint.get() + 1, self.start_rowid)
         if self.start_rowid > self.end_rowid:
-            print("start_rowid larger than end_rowid, Nothing to Do, Exit...")
-            os._exit(0)
-        # Done
+            raise Exception("start_rowid larger than end_rowid, Nothing to Do, Exit...")
         log.info("SQL Checked.")
 
     def run(self):
@@ -280,15 +293,15 @@ class SQLOperator(object):
         try:
             sql_tokens = sqlparse.parse(self.sql)[0].tokens
             sql_tokens = list(filter(lambda token: token.ttype not in (T.Whitespace, T.Newline), sql_tokens))
-            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND (".format(self.table_alias,
-                                                                                    self.table.rowid,
-                                                                                    start, stop)
+            rowid_condition = "WHERE {0}.{1} >= {2} AND {0}.{1} < {3} AND ".format(self.table_alias,
+                                                                                   self.table.rowid,
+                                                                                   start, stop)
             for i in range(len(sql_tokens)):
                 if isinstance(sql_tokens[i], sqlparse.sql.Where):
                     sql_tokens[i].value = sql_tokens[i].value.replace("WHERE", rowid_condition)
                     break
             sql_token_values = list(map(lambda token: token.value, sql_tokens))
-            batch_sql = ' '.join(sql_token_values) + ")"
+            batch_sql = ' '.join(sql_token_values)
         except Exception as e:
             log.error(f"Batch {batch_id} failed with exception {e}, exit... Exception:\n {format_exc()}")
             raise
@@ -332,20 +345,22 @@ if __name__ == '__main__':
                                db=conf.db, pool_size=conf.max_workers * 2)
     pool.init()
     pool.start_monitor()
-
-    # load table info
-    conn = pool.get()
-    table = Table(table_name=conf.table, db=conf.db, conn=conn)
-    table.load()
-    pool.put(conn)
-
-    # start sql operator
-    operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size,
-                           max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
-                           savepoint_file=conf.savepoint, execute=execute_flag)
-    operator.validate()
-    operator.run()
-
-    # close connection pool
-    pool.close()
+    try:
+        # load table info
+        conn = pool.get()
+        table = Table(table_name=conf.table, db=conf.db, conn=conn)
+        table.load()
+        pool.put(conn)
+        # start sql operator
+        operator = SQLOperator(pool=pool, table=table, sql=conf.sql.strip().strip(";"), batch_size=conf.batch_size,
+                               max_workers=conf.max_workers, start_rowid=conf.start_rowid, end_rowid=conf.end_rowid,
+                               savepoint_file=conf.savepoint, execute=execute_flag)
+        operator.validate()
+        operator.run()
+    except Exception as e:
+        log.critical(f"<<<<<<< DML Tool(by id) Failed! Exception: {e}")
+        raise e
+    finally:
+        # close connection pool
+        pool.close()
     log.info("<<<<<<< DML Tool(by id) Finished.")

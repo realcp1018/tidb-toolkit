@@ -36,12 +36,13 @@ from conf.config import Config
 
 # Const
 SUPPORTED_SQL_TYPES = ["DELETE", "UPDATE", "INSERT"]
+UNSUPPORTED_KEYWORDS = ["LIMIT"]
 
 
 def argParse():
     parser = argparse.ArgumentParser(description="TiDB Massive DML Tool(by time).")
     parser.add_argument("-f", dest="config", type=str, required=True, help="config file")
-    parser.add_argument("-l", dest="log", type=str, required=True, help="log file name")
+    parser.add_argument("-l", "--log", dest="log", type=str, required=True, help="log file name")
     parser.add_argument("-e", "--execute", dest="execute", action="store_true",
                         help="execute or just print the first batch by default")
     args = parser.parse_args()
@@ -159,74 +160,92 @@ class Table(object):
 class SQLOperator(object):
     def __init__(self, pool: MySQLConnectionPool = None, sql=None, table: Table = None, split_interval=None,
                  split_column_precision=None,
-                 start_time=None, end_time=None, batch_size=None, max_workers=None, execute=False):
+                 start_time: str = None, end_time: str = None, batch_size=None, max_workers=None, execute=False):
         self.pool: MySQLConnectionPool = pool
         self.table: Table = table
         self.sql = sql
-        self.concat_table_name = None
-        self.split_interval = int(split_interval) if split_interval else 86400
-        self.split_column_precision = int(split_column_precision) if split_column_precision else 0
-        self.start_time: Union[str, float] = start_time
-        self.end_time: Union[str, float] = end_time
+        self.table_alias = None
+        self.split_interval: Union[int, timedelta] = int(split_interval) if split_interval else 86400
+        self.split_column_precision: int = int(split_column_precision) if split_column_precision else 0
+        self.start_time: Union[str, float, datetime] = start_time
+        self.end_time: Union[str, float, datetime] = end_time
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.execute = execute
 
     def validate(self):
+        """
+        1. only SUPPORTED_SQL_TYPES are supported
+        2. exit when no where condition
+        3. exit when have unsupported keywords
+        4. set table alias to table.name if no alias found
+        5. wrap where condition with parentheses
+        6. check split_column data type,should be int/bigint/date/datetime/timestamp
+            - if int/bigint, the given str will be converted to unix timestamp(float) for time computation
+            - if date/datetime/timestamp, the given str will be converted to datetime and split_interval will be converted to timedelta for time computation
+            - else exit with error
+        if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)
+        """
         log.info("Checking SQL ...")
-        """
-        1.use sqlparse.format to format sql
-        2.only SUPPORTED_SQL_TYPES are supported
-        3.exit when no where condition
-        4.check split_column data type,should be int/bigint/date/datetime
-            。if int/bigint, then start_time/end_time will be converted to unix timestamp(float)
-            。if date/datetime/timestamp, then do nothing
-            。if others, exit with error
-        5.if no given start_time/end_time，then set start_time/end_time to min(split_column)/max(split_column)
-        """
-        # 1
-        self.sql = sqlparse.format(self.sql, reindent_aligned=True, use_space_around_operators=True,
-                                   keyword_case="upper")
+        self.sql = sqlparse.format(self.sql, use_space_around_operators=True, keyword_case="upper")
         log.info(f"SQL will be batched: \n{self.sql}")
-        # 2
         parsed_sql = sqlparse.parse(self.sql)[0]
+        # 1
         sql_type = parsed_sql.get_type()
         if sql_type not in SUPPORTED_SQL_TYPES:
             raise Exception(f"Unsupported SQL type: {sql_type}!")
-        # 3
-        sql_tokens = parsed_sql.tokens
-        for token in sql_tokens:
-            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name.lower():
-                self.concat_table_name = token.get_alias() if token.get_alias() else self.table.name
-                break
-        where_token = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
-        if len(where_token) == 0:
+
+        sql_tokens: sqlparse.sql.TokenList = parsed_sql.tokens
+        # 2
+        where_tokens = list(filter(lambda token: isinstance(token, sqlparse.sql.Where), sql_tokens))
+        if len(where_tokens) == 0:
             raise Exception("No where condition in SQL, exit...")
-        # 4 & 5
+        # 3
+        for token in sql_tokens:
+            if token.ttype == sqlparse.tokens.Keyword and token.value in UNSUPPORTED_KEYWORDS:
+                raise Exception(f"Unsupported keyword `{token.value}` in SQL!")
+        # 4
+        for token in sql_tokens:
+            if isinstance(token, sqlparse.sql.Identifier) and token.get_real_name() == self.table.name:
+                self.table_alias = token.get_alias() if token.get_alias() else self.table.name
+                break
+        # if no table_alias found, it means table specified in config file might not exist in sql
+        if not self.table_alias:
+            raise Exception(f"Table `{self.table.name}` specified in config file not found in sql, please check!")
+        # 5
+        where_token = where_tokens[0]
+        where_str = str(where_token)
+        new_where = f"WHERE ({where_str[5:]} ) "
+        self.sql = self.sql.replace(where_str, new_where, 1)
+        # 6
         if self.table.split_column_datatype in ('int', 'bigint'):
             try:
                 datetime.fromtimestamp(self.table.split_column_max / (10 ** self.split_column_precision))
-            except OSError as e:  # for windows
+            except OSError as e:
+                # for windows
                 if e.args[0] == 22:
                     raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
                                     "split_column_precision(3 or 6, default 0)!")
                 else:
                     raise e
-            except ValueError:  # for linux
+            except ValueError:
+                # for linux
                 raise Exception("Split column timestamp precision is ms or μs, Please specify a new "
                                 "split_column_precision(3 or 6, default 0)!")
-            self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
-                    10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
-            self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() * (
-                    10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
+            # convert given str to timestamp(float)
+            self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S").timestamp() \
+                              * (10 ** self.split_column_precision) if self.start_time else self.table.split_column_min
+            self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S").timestamp() \
+                            * (10 ** self.split_column_precision) if self.end_time else self.table.split_column_max
         elif self.table.split_column_datatype in ("date", "datetime", "timestamp"):
+            # convert given str to datetime and split_interval to timedelta
             self.start_time = datetime.strptime(self.start_time, "%Y-%m-%d %H:%M:%S") if self.start_time else \
                 self.table.split_column_min
             self.end_time = datetime.strptime(self.end_time, "%Y-%m-%d %H:%M:%S") if self.end_time else \
                 self.table.split_column_max
             self.split_interval = timedelta(seconds=self.split_interval)
         else:
-            raise Exception("Unsupported split column Data type: {self.table.split_column_datatype}!")
+            raise Exception(f"Unsupported split column Data type: {self.table.split_column_datatype}!")
         # Done
         log.info("SQL Checked.")
 
@@ -256,7 +275,8 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= {start} AND {self.concat_table_name}.{self.table.split_column} < {stop} AND ("
+                            f"WHERE {self.table_alias}.{self.table.split_column} >= {start} "
+                            f"AND {self.table_alias}.{self.table.split_column} < {stop} AND "
                         )
                         break
             else:
@@ -264,11 +284,12 @@ class SQLOperator(object):
                     if isinstance(sql_tokens[i], sqlparse.sql.Where):
                         sql_tokens[i].value = sql_tokens[i].value.replace(
                             "WHERE",
-                            f"WHERE {self.concat_table_name}.{self.table.split_column} >= '{start}' AND {self.concat_table_name}.{self.table.split_column} < '{stop}' AND ("
+                            f"WHERE {self.table_alias}.{self.table.split_column} >= '{start}' "
+                            f"AND {self.table_alias}.{self.table.split_column} < '{stop}' AND "
                         )
                         break
             sql_token_values = list(map(lambda token: token.value, sql_tokens))
-            task_sql = ' '.join(sql_token_values) + ")"
+            task_sql = ' '.join(sql_token_values)
             batch_sql = task_sql + f" limit {self.batch_size};"
         except Exception as e:
             log.error(f"Task SQL Generate Failed On [{start},{stop}) :{e}, Exception:\n{format_exc()}")
@@ -320,20 +341,24 @@ if __name__ == '__main__':
     pool.init()
     pool.start_monitor()
 
-    # load table info
-    conn = pool.get()
-    table = Table(table_name=conf.table, db=conf.db, split_column=conf.split_column, conn=conn)
-    table.load()
-    pool.put(conn)
-
-    # start a sql operator
-    operator = SQLOperator(pool=pool, sql=conf.sql.strip().strip(";"), table=table, split_interval=conf.split_interval,
-                           split_column_precision=conf.split_column_precision,
-                           start_time=conf.start_time, end_time=conf.end_time, batch_size=conf.batch_size,
-                           max_workers=conf.max_workers, execute=execute_flag)
-    operator.validate()
-    operator.run()
-
-    # close connection pool
-    pool.close()
+    try:
+        # load table info
+        conn = pool.get()
+        table = Table(table_name=conf.table, db=conf.db, split_column=conf.split_column, conn=conn)
+        table.load()
+        pool.put(conn)
+        # start a sql operator
+        operator = SQLOperator(pool=pool, sql=conf.sql.strip().strip(";"), table=table,
+                               split_interval=conf.split_interval,
+                               split_column_precision=conf.split_column_precision,
+                               start_time=conf.start_time, end_time=conf.end_time, batch_size=conf.batch_size,
+                               max_workers=conf.max_workers, execute=execute_flag)
+        operator.validate()
+        operator.run()
+    except Exception as e:
+        log.critical(f"<<<<<<< DML Tool(by time) Failed! Exception: {e}")
+        raise e
+    finally:
+        # close connection pool
+        pool.close()
     log.info("<<<<<<< DML Tool(by time) Finished.")
